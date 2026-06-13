@@ -1,9 +1,33 @@
-# 📚 文档中心
+# 文档清单
 
-## 文档导航
+> 本项目所有文档索引，按类型分类
 
-| 文档 | 路径 | 说明 |
+## 📋 需求文档 (docs/prd/)
+| 文档 | 日期 | 说明 |
 |------|------|------|
-| PRD | [prd/2026-06-14_hermes-chat-react-refactor.md](prd/2026-06-14_hermes-chat-react-refactor.md) | 产品需求文档 |
-| 设计拆解 | [design/2026-06-14_design-breakdown.md](design/2026-06-14_design-breakdown.md) | 架构设计 + 组件拆分 |
-| 测试报告 | [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 测试覆盖率报告 |
+| [prd/README.md](prd/README.md) | 2026-06-14 | 产品需求文档 |
+
+## 🏗️ 设计拆解 (docs/design/)
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [design/README.md](design/README.md) | 2026-06-14 | 设计拆解文档 |
+
+## 🧠 架构文档 (docs/architecture/)
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [architecture/README.md](architecture/README.md) | 2026-06-14 | 系统架构文档 |
+
+## 🧪 测试文档 (docs/test/)
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [test/README.md](test/README.md) | 2026-06-14 | 测试报告 |
+
+## 🧩 组件文档 (docs/components/)
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [components/README.md](components/README.md) | 2026-06-14 | 组件清单 |
+
+## 📌 待优化清单 (docs/backlog/)
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [backlog/2026-06-14_review-backlog.md](backlog/2026-06-14_review-backlog.md) | 2026-06-14 | 首次审查 9 个优化项 |

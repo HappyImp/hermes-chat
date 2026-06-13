@@ -17,7 +17,7 @@ export function ChatArea() {
   return (
     <div className="flex flex-col flex-1 min-w-0 h-screen">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2.5 bg-surface shrink-0">
+      <div className="pl-14 pr-4 py-3 lg:px-4 border-b border-border flex items-center gap-2.5 bg-surface shrink-0">
         <div className="w-2 h-2 rounded-full bg-success shrink-0" />
         <h1 className="text-base font-semibold flex-1">Hermes Agent</h1>
         <div className="flex gap-1.5">
