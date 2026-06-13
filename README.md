@@ -1,24 +1,26 @@
 # Hermes Chat
 
-一个基于 React 的 AI 聊天客户端，支持多会话管理、会话历史、Markdown 渲染和代码高亮。
-
-## 功能特性
-
-- 🤖 **AI 聊天** - 通过 SSE 流式传输与 Hermes Agent 对话
-- 💬 **多会话管理** - 每个 Channel 支持多个会话，随时切换
-- 📁 **Channel 管理** - 创建/删除 Channel，分类管理会话
-- 📝 **Markdown 渲染** - 支持代码高亮、表格、列表等
-- 📥 **导出对话** - 将对话导出为 Markdown 文件
-- 💾 **本地存储** - 会话历史自动保存到 localStorage
-- 📱 **响应式设计** - 支持移动端和桌面端
+> React 重构版 Hermes Chat — 支持会话历史、Channel 切换、侧边栏管理
 
 ## 技术栈
 
-- **React 18** + TypeScript
-- **Vite** 构建工具
-- **TailwindCSS** 样式框架
+- **React 18** + **TypeScript**
+- **Vite** 构建
+- **TailwindCSS** 样式
 - **Zustand** 状态管理
-- **Vitest** + Testing Library 测试
+- **localStorage** 持久化
+
+## 功能
+
+- 💬 消息收发（SSE 流式响应）
+- 📝 Markdown 渲染 + 代码高亮
+- 📋 代码块一键复制
+- 📥 导出对话为 Markdown
+- 💾 会话历史持久化（localStorage）
+- 📂 Channel 多会话管理
+- 🔄 会话新建/切换/删除
+- 📱 响应式布局（移动端适配）
+- 🌙 深色主题
 
 ## 快速开始
 
@@ -26,86 +28,74 @@
 # 安装依赖
 npm install
 
-# 启动开发服务器
+# 开发模式
 npm run dev
 
-# 构建生产版本
+# 构建
 npm run build
 
-# 运行测试
+# 测试
 npm test
 
-# 生成测试覆盖率报告
+# 覆盖率
 npm run test:coverage
 
-# 代码检查
+# Lint
 npm run lint
 
-# 代码格式化
+# 格式化
 npm run format
 ```
 
 ## 项目结构
 
 ```
-hermes-chat/
-├── docs/                        # 文档
-│   ├── prd/                     # 需求文档
-│   ├── design/                  # 设计拆解
-│   ├── architecture/            # 架构文档
-│   ├── test/                    # 测试文档
-│   └── components/              # 组件文档
-├── src/
-│   ├── components/              # React 组件
-│   │   ├── Chat/                # 聊天区域组件
-│   │   ├── Sidebar/             # 侧边栏组件
-│   │   ├── CodeBlock/           # 代码块组件
-│   │   └── Toast/               # 提示组件
-│   ├── hooks/                   # 自定义 Hooks
-│   ├── store/                   # 状态管理
-│   ├── utils/                   # 工具函数
-│   ├── types/                   # 类型定义
-│   ├── styles/                  # 全局样式
-│   └── test/                    # 测试配置
-├── index.html                   # 入口 HTML
-├── vite.config.ts               # Vite 配置
-├── tailwind.config.js           # TailwindCSS 配置
-├── vitest.config.ts             # Vitest 配置
-└── tsconfig.json                # TypeScript 配置
+src/
+├── main.tsx                 # 入口
+├── App.tsx                  # 根组件
+├── components/              # UI 组件
+│   ├── Sidebar/             # 侧边栏（Channel + Session 列表）
+│   ├── Chat/                # 聊天区（消息 + 输入框）
+│   ├── CodeBlock/           # 代码块渲染
+│   └── Toast/               # 提示组件
+├── hooks/                   # 自定义 hooks
+│   ├── useChat.ts           # 聊天逻辑
+│   ├── useSession.ts        # 会话管理
+│   └── useToast.ts          # Toast 提示
+├── store/                   # 状态管理
+│   └── sessionStore.ts      # Zustand store
+├── utils/                   # 工具函数
+│   ├── markdown.ts          # Markdown 渲染
+│   ├── storage.ts           # localStorage 封装
+│   └── uuid.ts              # UUID 生成
+├── types/                   # 类型定义
+└── styles/                  # 样式
 ```
 
-## 架构设计
+## API
 
-采用 **组件化 + 状态管理** 架构：
+使用 OpenAI 兼容的 Chat Completions API：
 
-- **组件层**：纯 UI 组件，通过 Props 接收数据
-- **Hooks 层**：封装业务逻辑，连接组件与状态
-- **Store 层**：Zustand 全局状态管理，支持 localStorage 持久化
-- **Utils 层**：纯函数工具库
-
-## API 接口
-
-聊天功能通过 SSE 流式调用 `/chat/api/v1/chat/completions` 接口：
-
-```json
+```
 POST /chat/api/v1/chat/completions
+Content-Type: application/json
+
 {
   "model": "hermes-agent",
-  "messages": [{"role": "user", "content": "你好"}],
+  "messages": [...],
   "stream": true
 }
 ```
 
 ## 部署
 
-构建后将 `dist/` 目录部署到 Nginx：
+构建输出部署到 `/var/www/chat/`，Nginx 5244 端口。
 
 ```bash
 npm run build
 cp -r dist/* /var/www/chat/
+nginx -s reload
 ```
-
-Nginx 配置监听 5244 端口。
 
 ## License
 
