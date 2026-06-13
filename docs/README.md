@@ -31,3 +31,4 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [backlog/2026-06-14_review-backlog.md](backlog/2026-06-14_review-backlog.md) | 2026-06-14 | 首次审查 9 个优化项 |
+| [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
