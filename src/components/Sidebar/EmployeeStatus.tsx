@@ -14,15 +14,11 @@ function EmployeeCard({ employee }: { employee: Employee }) {
         <span className="text-xl">{employee.avatar}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-text truncate">
-              {employee.name}
-            </span>
+            <span className="text-sm font-medium text-text truncate">{employee.name}</span>
             <span
               className={`inline-block w-2 h-2 rounded-full shrink-0 ${getStatusColor(employee.status)}`}
             />
-            <span className="text-xs text-text2 shrink-0">
-              {getStatusLabel(employee.status)}
-            </span>
+            <span className="text-xs text-text2 shrink-0">{getStatusLabel(employee.status)}</span>
           </div>
           <span className="text-xs text-text2">{employee.role}</span>
         </div>
@@ -79,8 +75,7 @@ export function EmployeeStatus({ onBack }: EmployeeStatusProps) {
 
       {/* Summary */}
       <div className="px-3 py-2 text-xs text-text2 border-b border-border shrink-0">
-        <span className="text-success">{workingCount}</span> 人工作中 · 共{' '}
-        {employees.length} 人
+        <span className="text-success">{workingCount}</span> 人工作中 · 共 {employees.length} 人
         <span className="float-right text-text2/50">
           {lastUpdated.toLocaleTimeString('zh-CN', {
             hour: '2-digit',
