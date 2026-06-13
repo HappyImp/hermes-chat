@@ -4,7 +4,7 @@
 
 **路径**: `src/components/Sidebar/Sidebar.tsx`
 
-侧边栏容器，包含 Channel 列表和会话列表。
+侧边栏容器，包含 Channel 列表、会话列表和员工状态面板。
 
 ### Props
 
@@ -17,6 +17,7 @@
 
 - 移动端：overlay 模式，点击遮罩关闭
 - 桌面端：固定显示在左侧
+- 底部「👥 员工状态」按钮，切换到员工状态面板
 
 ---
 
@@ -68,7 +69,37 @@ Channel 管理组件。
 
 ---
 
-## 4. ChatArea
+## 4. EmployeeStatus
+
+**路径**: `src/components/Sidebar/EmployeeStatus.tsx`
+
+员工实时状态面板，展示每个 AI 员工的工作状态、当前任务和任务列表。
+
+### Props
+
+| 属性 | 类型 | 描述 |
+|------|------|------|
+| onBack | () => void | 返回主侧边栏回调 |
+
+### 特性
+
+- 显示所有员工列表（老财、铁壳、小K、404、裁判君）
+- 每个员工卡片显示：头像 emoji、名字、角色、状态标签、当前任务、任务标签
+- 状态标签：工作中 🟢 / 待命 🟡 / 休息 ⚪
+- 顶部统计：在岗人数 / 总人数
+- 右上角刷新按钮
+- 自动刷新（每 60 秒）
+- 深色主题，与现有 UI 一致
+- 移动端适配
+
+### 数据来源
+
+- `src/data/employees.json` — 初始员工状态数据
+- `src/hooks/useEmployeeStatus.ts` — 状态管理 Hook
+
+---
+
+## 5. ChatArea
 
 **路径**: `src/components/Chat/ChatArea.tsx`
 
@@ -83,7 +114,7 @@ Channel 管理组件。
 
 ---
 
-## 5. MessageBubble
+## 6. MessageBubble
 
 **路径**: `src/components/Chat/MessageBubble.tsx`
 
@@ -103,7 +134,7 @@ Channel 管理组件。
 
 ---
 
-## 6. MessageInput
+## 7. MessageInput
 
 **路径**: `src/components/Chat/MessageInput.tsx`
 
@@ -125,7 +156,7 @@ Channel 管理组件。
 
 ---
 
-## 7. Welcome
+## 8. Welcome
 
 **路径**: `src/components/Chat/Welcome.tsx`
 
@@ -138,7 +169,7 @@ Channel 管理组件。
 
 ---
 
-## 8. CodeBlock
+## 9. CodeBlock
 
 **路径**: `src/components/CodeBlock/CodeBlock.tsx`
 
@@ -158,7 +189,7 @@ Channel 管理组件。
 
 ---
 
-## 9. Toast
+## 10. Toast
 
 **路径**: `src/components/Toast/Toast.tsx`
 

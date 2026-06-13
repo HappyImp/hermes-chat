@@ -75,4 +75,31 @@ describe('Sidebar', () => {
     fireEvent.click(btn);
     expect(screen.getByPlaceholderText('channel 名称')).toBeInTheDocument();
   });
+
+  it('shows employee status button', () => {
+    useSessionStore.getState().createSession('default');
+    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    expect(screen.getByText('员工状态')).toBeInTheDocument();
+  });
+
+  it('shows employee status panel when button clicked', () => {
+    useSessionStore.getState().createSession('default');
+    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    const btn = screen.getByText('员工状态');
+    fireEvent.click(btn);
+    expect(screen.getByText(/员工状态/)).toBeInTheDocument();
+    expect(screen.getByText('老财')).toBeInTheDocument();
+  });
+
+  it('returns to main sidebar when back clicked in employee panel', () => {
+    useSessionStore.getState().createSession('default');
+    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    // Open employee panel
+    fireEvent.click(screen.getByText('员工状态'));
+    expect(screen.getByText('老财')).toBeInTheDocument();
+    // Click back
+    fireEvent.click(screen.getByTitle('返回'));
+    // Should be back to main sidebar
+    expect(screen.getByText(/# default/)).toBeInTheDocument();
+  });
 });

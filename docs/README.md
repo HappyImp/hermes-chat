@@ -25,7 +25,7 @@
 ## 🧩 组件文档 (docs/components/)
 | 文档 | 日期 | 说明 |
 |------|------|------|
-| [components/README.md](components/README.md) | 2026-06-14 | 组件清单 |
+| [components/README.md](components/README.md) | 2026-06-14 | 组件清单（含新增 EmployeeStatus 员工状态面板） |
 
 ## 📌 待优化清单 (docs/backlog/)
 | 文档 | 日期 | 说明 |

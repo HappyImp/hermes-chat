@@ -1,0 +1,44 @@
+{
+  "employees": [
+    {
+      "name": "老财",
+      "role": "AI操盘手",
+      "avatar": "💰",
+      "status": "working",
+      "currentTask": "盘前研判分析",
+      "tasks": ["盘前研判", "开盘异动", "午盘复盘", "尾盘异动", "每晚复盘"]
+    },
+    {
+      "name": "铁壳",
+      "role": "AI运维工程师",
+      "avatar": "🤖",
+      "status": "standby",
+      "currentTask": "待命中",
+      "tasks": ["每日日报", "运维护航"]
+    },
+    {
+      "name": "小K",
+      "role": "AI情报员",
+      "avatar": "🔍",
+      "status": "working",
+      "currentTask": "早报编辑",
+      "tasks": ["每日早报"]
+    },
+    {
+      "name": "404",
+      "role": "AI开发工程师",
+      "avatar": "💻",
+      "status": "standby",
+      "currentTask": "待命中",
+      "tasks": ["每日日报", "开发任务"]
+    },
+    {
+      "name": "裁判君",
+      "role": "AI审查官",
+      "avatar": "⚖️",
+      "status": "off",
+      "currentTask": "休息中",
+      "tasks": ["按需审查"]
+    }
+  ]
+}
