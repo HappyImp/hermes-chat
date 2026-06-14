@@ -22,6 +22,11 @@ export function LoginPage() {
         return;
       }
 
+      if (mode === 'register' && password.length < 6) {
+        setError('密码至少需要 6 位');
+        return;
+      }
+
       setLoading(true);
       try {
         if (mode === 'register') {
@@ -83,14 +88,19 @@ export function LoginPage() {
             className="w-full px-3 py-2 bg-bg border border-border rounded-md text-text text-sm outline-none focus:border-accent"
             autoComplete="username"
           />
-          <input
-            type="password"
-            placeholder="密码"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 bg-bg border border-border rounded-md text-text text-sm outline-none focus:border-accent"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
+          <div>
+            <input
+              type="password"
+              placeholder="密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 bg-bg border border-border rounded-md text-text text-sm outline-none focus:border-accent"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            />
+            {mode === 'register' && (
+              <p className="text-text2 text-xs mt-1">至少 6 位</p>
+            )}
+          </div>
 
           {error && (
             <p className="text-red-400 text-xs text-center">{error}</p>
