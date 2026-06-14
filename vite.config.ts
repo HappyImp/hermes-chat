@@ -11,10 +11,12 @@ function activeEmployeesMiddleware(): Plugin {
   return {
     name: 'active-employees-middleware',
     configureServer(server) {
-      server.middlewares.use('/chat/api/employees/active', (_req, res, next) => {
+      server.middlewares.use('/chat/data/employees-active.json', (_req, res, next) => {
         const file = '/tmp/employees-active.json';
         if (!existsSync(file)) {
-          next();
+          // File doesn't exist yet — return empty object, not 404
+          res.setHeader('Content-Type', 'application/json');
+          res.end('{}');
           return;
         }
         try {
@@ -22,7 +24,9 @@ function activeEmployeesMiddleware(): Plugin {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(data));
         } catch {
-          next();
+          // Corrupted file — return empty object gracefully
+          res.setHeader('Content-Type', 'application/json');
+          res.end('{}');
         }
       });
     },
