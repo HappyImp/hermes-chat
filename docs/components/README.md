@@ -136,6 +136,7 @@ Shell Hooks 机制在 session start/end 时自动写入/移除活跃状态文件
 - 消息列表自动滚动到底部
 - 空会话显示欢迎页
 - 流式回复时显示打字指示器
+- 支持 `/dispatch` 命令：拦截命令 → 启动员工任务 → 插入 TaskCard → 同时触发 AI 回复
 
 ---
 
@@ -155,6 +156,7 @@ Shell Hooks 机制在 session start/end 时自动写入/移除活跃状态文件
 
 - 用户消息：右侧蓝色气泡，纯文本
 - AI 消息：左侧灰色气泡，Markdown 渲染
+- 任务消息：左侧 TaskCard 组件渲染（通过 message.metadata 识别）
 - 头像 emoji 区分角色
 
 ---
@@ -231,3 +233,40 @@ Shell Hooks 机制在 session start/end 时自动写入/移除活跃状态文件
 - 底部居中显示
 - 自动消失（2 秒）
 - 无消息时不渲染
+
+---
+
+## 11. TaskCard
+
+**路径**: `src/components/Chat/TaskCard.tsx`
+
+员工异步任务卡片组件，显示任务状态、进度和结果。
+
+### Props
+
+| 属性 | 类型 | 描述 |
+|------|------|------|
+| taskInfo | TaskInfo | 任务信息对象 |
+
+### TaskInfo 接口
+
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| id | string | 任务 ID |
+| employee | string | 员工名称 |
+| task | string | 任务描述 |
+| status | 'pending' \| 'working' \| 'completed' \| 'failed' \| 'timeout' | 任务状态 |
+| startedAt | Date | 启动时间 |
+| result | string? | 任务结果（完成后） |
+| error | string? | 错误信息（失败时） |
+
+### 特性
+- 状态图标：⏳等待 🔄执行中 ✅完成 ❌失败 ⏰超时
+- 员工头像 emoji + 角色名显示
+- 任务完成后显示结果，失败时显示错误信息
+- 深色主题，与现有 UI 一致
+
+### 数据来源
+
+- `src/hooks/useEmployeeTask.ts` — 任务调度与轮询
+- `/tmp/employees-active.json` — 任务状态文件

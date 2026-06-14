@@ -9,6 +9,7 @@
 | [employee-status](2026-06-14_employee-status.md) | 2026-06-14 | 员工状态面板 | ✅ 完成 |
 | [shell-hooks](2026-06-14_shell-hooks.md) | 2026-06-14 | Shell Hooks 自动追踪 | ✅ 完成 |
 | [pixel-office](2026-06-14_pixel-office.md) | 2026-06-14 | 像素风办公室 | ✅ 完成 |
+| [employee-async-task](2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 | ✅ 完成 |
 
 ## 技术约束（全局）
 

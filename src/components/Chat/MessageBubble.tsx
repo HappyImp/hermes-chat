@@ -1,5 +1,6 @@
 import type { Message } from '@/types';
 import { renderMarkdown } from '@/utils';
+import { TaskCard } from './TaskCard';
 
 interface MessageBubbleProps {
   message: Message;
@@ -8,6 +9,18 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const avatar = isUser ? '👤' : '🤖';
+
+  // 检查是否是任务消息
+  if (message.metadata?.type === 'task') {
+    return (
+      <div className="flex gap-2.5 max-w-[85%] animate-fade-in self-start">
+        <div className="w-[30px] h-[30px] rounded-lg flex items-center justify-center text-[13px] shrink-0 bg-primary">
+          🤖
+        </div>
+        <TaskCard taskInfo={message.metadata.taskInfo} />
+      </div>
+    );
+  }
 
   return (
     <div

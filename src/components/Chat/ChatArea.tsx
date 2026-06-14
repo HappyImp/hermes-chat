@@ -1,18 +1,69 @@
-import { useRef, useEffect } from 'react';
-import { useChat, useSession } from '@/hooks';
+import { useRef, useEffect, useCallback } from 'react';
+import { useChat, useSession, useEmployeeTask } from '@/hooks';
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { Welcome } from './Welcome';
+import { parseCommand } from '@/utils/commandParser';
+import { useSessionStore } from '@/store/sessionStore';
+import { generateId } from '@/utils';
 
 export function ChatArea() {
   const { messages, exportChat, clearChat } = useSession();
   const { sendMessage, isStreaming } = useChat();
+  const { dispatchTask } = useEmployeeTask();
   const chatRef = useRef<HTMLDivElement>(null);
+  const { addMessage } = useSessionStore();
 
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+
+      // 检查是否是 dispatch 命令
+      const command = parseCommand(text);
+
+      if (command.type === 'dispatch') {
+        try {
+          // 启动任务
+          const taskInfo = await dispatchTask(command.employee, command.task);
+
+          // 插入用户消息（显示命令）
+          addMessage({ id: generateId(), role: 'user', content: text });
+
+          // 插入任务卡片消息
+          addMessage({
+            id: generateId(),
+            role: 'assistant',
+            content: '',
+            metadata: {
+              type: 'task',
+              taskInfo,
+            },
+          });
+
+          // 同时发送给 AI 获取回复
+          await sendMessage(text);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '任务启动失败';
+
+          // 显示错误消息
+          addMessage({
+            id: generateId(),
+            role: 'assistant',
+            content: `❌ 任务启动失败: ${errorMessage}`,
+          });
+        }
+      } else {
+        // 普通消息
+        await sendMessage(text);
+      }
+    },
+    [dispatchTask, sendMessage, addMessage],
+  );
 
   return (
     <div className="flex flex-col flex-1 min-w-0 h-screen">
@@ -55,7 +106,7 @@ export function ChatArea() {
       </div>
 
       {/* Input */}
-      <MessageInput onSend={sendMessage} disabled={isStreaming} />
+      <MessageInput onSend={handleSend} disabled={isStreaming} />
     </div>
   );
 }

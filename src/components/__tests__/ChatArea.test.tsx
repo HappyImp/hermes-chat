@@ -21,6 +21,12 @@ vi.mock('@/hooks', () => ({
     };
   },
   useToast: () => ({ message: null, showToast: vi.fn() }),
+  useEmployeeTask: () => ({
+    dispatchTask: vi.fn(),
+    getTaskStatus: vi.fn(() => null),
+    activeTasks: new Map(),
+    removeTask: vi.fn(),
+  }),
 }));
 
 describe('ChatArea', () => {

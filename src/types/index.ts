@@ -1,7 +1,25 @@
+/** 任务信息（用于消息元数据） */
+export interface TaskInfo {
+  id: string;
+  employee: string;
+  task: string;
+  status: 'pending' | 'working' | 'completed' | 'failed' | 'timeout';
+  startedAt: Date;
+  result?: string;
+  error?: string;
+}
+
+/** 消息元数据 */
+export interface MessageMetadata {
+  type: 'task';
+  taskInfo: TaskInfo;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  metadata?: MessageMetadata;
 }
 
 export interface Session {
