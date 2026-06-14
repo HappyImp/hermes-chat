@@ -12,7 +12,8 @@ EMPLOYEES=("老财" "铁壳" "小K" "404" "裁判君")
 identify_employee() {
   local prompt="${HERMES_SESSION_PROMPT:-}"
   for name in "${EMPLOYEES[@]}"; do
-    if [[ "${prompt:0:6}" == *"$name"* ]]; then
+    # Use glob pattern matching — works correctly with multi-byte UTF-8 names
+    if [[ "$prompt" == "$name"* ]]; then
       echo "$name"
       return 0
     fi
@@ -47,9 +48,21 @@ on_session_start() {
     flock -n 200 || exit 0
     ensure_file
     python3 -c "
-import json, sys
+import json, sys, datetime
 with open('$ACTIVE_FILE', 'r') as f:
     data = json.load(f)
+# TTL cleanup: remove entries older than 2 hours (crashed/killed sessions)
+now = datetime.datetime.utcnow()
+stale = []
+for emp, info in data.items():
+    try:
+        started = datetime.datetime.strptime(info['startedAt'], '%Y-%m-%dT%H:%M:%SZ')
+        if (now - started).total_seconds() > 7200:
+            stale.append(emp)
+    except (KeyError, ValueError):
+        stale.append(emp)
+for emp in stale:
+    del data[emp]
 data['$employee'] = {'task': sys.argv[1], 'startedAt': '$ts'}
 with open('$ACTIVE_FILE', 'w') as f:
     json.dump(data, f, ensure_ascii=False)
