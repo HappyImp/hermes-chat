@@ -40,19 +40,27 @@ describe('mapJobNameToEmployee', () => {
     expect(mapJobNameToEmployee('404-employee-status-api')).toBe('404');
   });
 
+  it('maps 裁判君 jobs', () => {
+    expect(mapJobNameToEmployee('裁判君审查')).toBe('裁判君');
+  });
+
+  it('maps Ditto jobs', () => {
+    expect(mapJobNameToEmployee('Ditto测试')).toBe('Ditto');
+    expect(mapJobNameToEmployee('ditto-test')).toBe('Ditto');
+  });
+
   it('returns null for unknown job names', () => {
-    expect(mapJobNameToEmployee('裁判君审查')).toBeNull();
     expect(mapJobNameToEmployee('random-task')).toBeNull();
   });
 });
 
 describe('deriveEmployeeStatus', () => {
-  it('returns working when last_run_at is within 5 minutes', () => {
+  it('returns working when job state is running', () => {
     const now = new Date('2026-06-14T10:00:00+08:00');
     const jobs = [
       makeJob({
         name: '老财-盘前研判',
-        last_run_at: '2026-06-14T09:58:00+08:00',
+        state: 'running',
       }),
     ];
 
@@ -113,7 +121,7 @@ describe('deriveEmployeeStatus', () => {
     const jobs = [
       makeJob({
         name: '老财-盘前研判',
-        last_run_at: '2026-06-14T09:58:00+08:00',
+        state: 'running',
       }),
       makeJob({
         name: '老财-开盘异动',
@@ -152,6 +160,21 @@ describe('deriveEmployeeStatus', () => {
       makeJob({
         name: '老财-盘前研判',
         next_run_at: '2026-06-14T09:00:00+08:00',
+      }),
+    ];
+
+    const result = deriveEmployeeStatus(jobs, now);
+    expect(result.status).toBe('standby');
+  });
+
+  it('completed job (scheduled state with last_run_at) returns standby not working', () => {
+    const now = new Date('2026-06-14T10:00:00+08:00');
+    const jobs = [
+      makeJob({
+        name: '老财-盘前研判',
+        state: 'scheduled',
+        last_run_at: '2026-06-14T09:58:00+08:00',
+        next_run_at: '2026-06-15T09:25:00+08:00',
       }),
     ];
 
