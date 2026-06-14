@@ -66,3 +66,4 @@
 | [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
 || [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |
 || [backlog/2026-06-14_auth-login-register-review.md](backlog/2026-06-14_auth-login-register-review.md) | 2026-06-14 | 登录/注册功能审查（1🟡+2🟢） |
+|| [backlog/2026-06-14_auth-logout-review.md](backlog/2026-06-14_auth-logout-review.md) | 2026-06-14 | 登出功能审查（6🟡+3🟢） |
