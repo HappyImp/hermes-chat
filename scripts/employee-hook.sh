@@ -13,7 +13,7 @@ identify_employee() {
   local prompt="${HERMES_SESSION_PROMPT:-}"
   for name in "${EMPLOYEES[@]}"; do
     # Use glob pattern matching — works correctly with multi-byte UTF-8 names
-    if [[ "$prompt" == "$name"* ]]; then
+    if [[ "$prompt" == *"$name"* ]]; then
       echo "$name"
       return 0
     fi
