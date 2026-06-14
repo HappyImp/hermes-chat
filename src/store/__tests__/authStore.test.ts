@@ -40,6 +40,19 @@ describe('authStore', () => {
     expect(state.username).toBeNull();
   });
 
+  it('logout API 失败时仍清除本地状态', async () => {
+    const { logout: logoutApi } = await import('../../api/auth');
+    vi.mocked(logoutApi).mockRejectedValueOnce(new Error('网络异常'));
+
+    useAuthStore.getState().login('test-token', 'alice');
+    await useAuthStore.getState().logout();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.token).toBeNull();
+    expect(state.username).toBeNull();
+  });
+
   it('getAuthToken 返回当前 token', () => {
     expect(getAuthToken()).toBeNull();
     useAuthStore.getState().login('my-token', 'bob');
