@@ -65,7 +65,10 @@ pub async fn completions(
                         }
                     }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    tracing::warn!("SSE 流读取错误: {}", e);
+                    break;
+                }
             }
         }
     };

@@ -1,26 +1,27 @@
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{extract::State, Json};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::errors::AppError;
-use crate::middleware::auth::AuthUser;
-use crate::models::permission::SetPermission;
-use crate::models::user::User;
+use crate::middleware::auth::AdminUser;
+
+/// 用于 list_users 的查询结构体，不含 password_hash
+#[derive(Debug, Deserialize, sqlx::FromRow)]
+struct UserListItem {
+    pub id: String,
+    pub username: String,
+    pub role: String,
+    pub created_at: String,
+}
 
 pub async fn list_users(
     State(state): State<AppState>,
-    auth: AuthUser,
+    _admin: AdminUser,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden("需要管理员权限".to_string()));
-    }
-
-    let users = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, role, created_at, updated_at FROM users"
+    let users = sqlx::query_as::<_, UserListItem>(
+        "SELECT id, username, role, created_at FROM users"
     )
     .fetch_all(&state.pool)
     .await?;
@@ -40,15 +41,18 @@ pub async fn list_users(
     Ok(Json(json!({ "users": user_list })))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SetPermission {
+    pub user_id: String,
+    pub employee: String,
+    pub allowed: bool,
+}
+
 pub async fn set_permission(
     State(state): State<AppState>,
-    auth: AuthUser,
+    _admin: AdminUser,
     Json(input): Json<SetPermission>,
 ) -> Result<Json<Value>, AppError> {
-    if auth.role != "admin" {
-        return Err(AppError::Forbidden("需要管理员权限".to_string()));
-    }
-
     let id = Uuid::new_v4().to_string();
     let allowed = if input.allowed { 1 } else { 0 };
 

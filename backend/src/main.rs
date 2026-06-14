@@ -20,12 +20,14 @@ use db::DbPool;
 use middleware::auth::auth_middleware;
 use middleware::cors::cors_layer;
 use services::auth::AuthService;
+use services::employee::EmployeeService;
 use services::hermes::HermesClient;
 
 #[derive(Clone)]
 struct AppState {
     pool: DbPool,
     auth_service: AuthService,
+    employee_service: EmployeeService,
     hermes_client: HermesClient,
 }
 
@@ -65,6 +67,7 @@ async fn main() {
     let state = AppState {
         pool,
         auth_service,
+        employee_service: EmployeeService::new(),
         hermes_client,
     };
 
