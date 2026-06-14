@@ -43,3 +43,7 @@ Channel 管理组件。
 ## 11. TaskCard
 
 员工异步任务卡片组件，显示任务状态、进度和结果。
+
+## 12. LoginPage
+
+登录/注册组件。支持 tab 切换登录/注册模式，token 通过 Zustand persist 存储到 localStorage。未登录时 App 条件渲染此组件。

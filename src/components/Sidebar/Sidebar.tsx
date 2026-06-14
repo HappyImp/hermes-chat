@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useSession } from '@/hooks';
+import { useAuthStore } from '@/store/authStore';
 import { ChannelList } from './ChannelList';
 import { SessionList } from './SessionList';
 import { EmployeeStatus } from './EmployeeStatus';
@@ -12,6 +13,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, onOpenOffice }: SidebarProps) {
   const [showEmployees, setShowEmployees] = useState(false);
+  const { username, logout } = useAuthStore();
   const {
     sessions,
     currentSessionId,
@@ -104,14 +106,21 @@ export function Sidebar({ isOpen, onClose, onOpenOffice }: SidebarProps) {
               />
             </div>
 
-            {/* Employee status button */}
-            <div className="px-2 py-2 border-t border-border shrink-0">
+            {/* Employee status button + Logout */}
+            <div className="px-2 py-2 border-t border-border shrink-0 flex flex-col gap-1">
               <button
                 onClick={handleToggleEmployees}
                 className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-text2 hover:bg-bg hover:text-text transition-colors cursor-pointer bg-transparent border-none"
               >
                 <span>👥</span>
                 <span>员工状态</span>
+              </button>
+              <button
+                onClick={logout}
+                className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-text2 hover:bg-bg hover:text-red-400 transition-colors cursor-pointer bg-transparent border-none"
+              >
+                <span>🚪</span>
+                <span>{username ? `${username} · 登出` : '登出'}</span>
               </button>
             </div>
           </>

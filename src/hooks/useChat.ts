@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
+import { useAuthStore } from '@/store/authStore';
 import { renderMarkdown, generateId } from '@/utils';
 
 const API_URL = '/chat/v1/chat/completions';
@@ -198,9 +199,17 @@ async function attemptSend(opts: {
 
   let pendingError: Error | undefined;
   try {
+    const token = useAuthStore.getState().token;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const resp = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         model: 'hermes-agent',
         messages: getMessages(),
@@ -209,6 +218,10 @@ async function attemptSend(opts: {
       signal: controller.signal,
     });
 
+    if (resp.status === 401) {
+      useAuthStore.getState().logout();
+      throw new Error('认证已过期，请重新登录');
+    }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
     const [full, hadProgress] = await consumeSSEStream(

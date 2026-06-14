@@ -24,6 +24,7 @@
 | [design/2026-06-14_pixel-office-design.md](design/2026-06-14_pixel-office-design.md) | 2026-06-14 | 像素风办公室设计 |
 | [design/2026-06-14_employee-async-task-design.md](design/2026-06-14_employee-async-task-design.md) | 2026-06-14 | F6 员工异步任务设计 |
 | [design/2026-06-14_rust-backend-account-system.md](design/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统技术设计 |
+| [design/2026-06-14_auth-login-register-design.md](design/2026-06-14_auth-login-register-design.md) | 2026-06-14 | 登录/注册功能设计 |
 
 ## 🧠 架构文档 (docs/architecture/)
 
@@ -45,7 +46,7 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
-| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（30 文件 / 246 测试全部通过） |
+| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（33 文件 / 265 测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
 

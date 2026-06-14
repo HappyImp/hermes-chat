@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { useAuthStore } from '@/store/authStore';
+import { LoginPage } from '@/components/Auth/LoginPage';
 import { Sidebar } from '@/components/Sidebar';
 import { ChatArea } from '@/components/Chat';
 import { Toast } from '@/components/Toast';
@@ -8,6 +10,7 @@ import { useEmployeeStatus } from '@/hooks/useEmployeeStatus';
 import { PixelOffice } from '@/components/Office/PixelOffice';
 
 export function App() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOffice, setShowOffice] = useState(false);
   const { message: toastMessage } = useToast();
@@ -28,6 +31,14 @@ export function App() {
   const closeOffice = useCallback(() => {
     setShowOffice(false);
   }, []);
+
+  if (!isAuthenticated) {
+    return (
+      <ErrorBoundary>
+        <LoginPage />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

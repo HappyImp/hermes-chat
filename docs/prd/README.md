@@ -8,3 +8,4 @@
 | [2026-06-14_shell-hooks.md](2026-06-14_shell-hooks.md) | 2026-06-14 | Shell Hooks 自动追踪 PRD |
 | [2026-06-14_pixel-office.md](2026-06-14_pixel-office.md) | 2026-06-14 | 像素风办公室 PRD |
 | [2026-06-14_employee-async-task.md](2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
+| [2026-06-14_auth-login-register.md](2026-06-14_auth-login-register.md) | 2026-06-14 | 登录/注册功能 PRD |
