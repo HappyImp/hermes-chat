@@ -37,7 +37,7 @@ describe('renderMarkdown', () => {
   it('falls back to escaped text on error', () => {
     // Mock marked.parse to throw an error
     const originalParse = marked.parse;
-    marked.parse = () => { throw new Error('Test error'); };
+    (marked as unknown as { parse: () => string }).parse = () => { throw new Error('Test error'); };
     
     const result = renderMarkdown('test & <script>alert(1)</script>');
     expect(result).toContain('test &amp;');

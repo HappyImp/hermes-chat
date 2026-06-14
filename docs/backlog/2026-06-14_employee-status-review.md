@@ -89,6 +89,40 @@
 ---
 
 ## 修复记录
+| 2026-06-14 | Shell Hooks Review | 裁判君 | 新增 #13-16 |
+
+---
+
+## 二次审查：Shell Hooks 实现（2026-06-14）
+
+> 提交：2ddb5e6 feat(status): add shell hooks for real-time employee task tracking
+> 代码质量：⭐⭐⭐☆☆ (3/5)
+> 审查结论：❌ 需修复后重审（1 个严重问题）
+
+### 🔴 严重问题
+
+#### #13. vite.config.ts:51 — 代理 rewrite 正则语法错误（回归）
+- **问题**：正则从 `/^\\/chat\\/api/` 被改为 `/^\\\\/chat\\\\/api/`，四个反斜杠导致 SyntaxError
+- **影响**：所有非 `/chat/api/employees/active` 的 API 请求 proxy rewrite 失效
+- **状态**：待修复
+- **修复方案**：还原为 `p.replace(/^\\/chat\\/api/, '/api')`
+
+### 🟡 中等问题
+
+#### #14. employee-hook.sh:15 — identify_employee 仅检查前 6 字节
+- **问题**：`${prompt:0:6}` 是字节切片，CJK 名字匹配脆弱，"裁判君"(9B) 完全超出范围
+- **建议**：改为 `if [[ "$prompt" == *"$name"* ]]` 全文匹配
+- **状态**：待修复
+
+#### #15. employee-hook.sh — session 崩溃时 active 条目永久残留
+- **问题**：kill -9 终止 session 时 on_session_end 不执行，条目不会被清理
+- **建议**：ensure_file 中添加 TTL 检查，startedAt 超过 2 小时的条目自动移除
+- **状态**：待修复
+
+#### #16. vite.config.ts — proxy 注释被删除
+- **问题**：原有注释说明了 dev proxy 行为和认证机制
+- **建议**：还原注释
+- **状态**：待修复
 
 | 日期 | 问题编号 | 修复人 | 状态 |
 |------|---------|--------|------|
