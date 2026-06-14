@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { useSessionStore } from '@/store/sessionStore';
 
@@ -82,23 +82,37 @@ describe('Sidebar', () => {
     expect(screen.getByText('员工状态')).toBeInTheDocument();
   });
 
-  it('shows employee status panel when button clicked', () => {
+  it('shows employee status panel when button clicked', async () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
+    await act(async () => {
+      render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
+    });
     const btn = screen.getByText('员工状态');
-    fireEvent.click(btn);
-    expect(screen.getByText(/员工状态/)).toBeInTheDocument();
-    expect(screen.getByText('老财')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/员工状态/)).toBeInTheDocument();
+      expect(screen.getByText('老财')).toBeInTheDocument();
+    });
   });
 
-  it('returns to main sidebar when back clicked in employee panel', () => {
+  it('returns to main sidebar when back clicked in employee panel', async () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
+    await act(async () => {
+      render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
+    });
     // Open employee panel
-    fireEvent.click(screen.getByText('员工状态'));
-    expect(screen.getByText('老财')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByText('员工状态'));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('老财')).toBeInTheDocument();
+    });
     // Click back
-    fireEvent.click(screen.getByTitle('返回'));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('返回'));
+    });
     // Should be back to main sidebar
     expect(screen.getByText(/# default/)).toBeInTheDocument();
   });

@@ -81,18 +81,14 @@ describe('useSession', () => {
     
     // Mock download functionality
     const mockClick = vi.fn();
-    const mockCreateElement = vi.spyOn(document, 'createElement').mockReturnValue({
-      href: '',
-      download: '',
-      click: mockClick,
-    } as any);
-    const mockAppendChild = vi.spyOn(document.body, 'appendChild').mockReturnValue(null as any);
-    const mockRemoveChild = vi.spyOn(document.body, 'removeChild').mockReturnValue(null as any);
-    // URL.createObjectURL may not exist in test env, mock it
+    const mockAnchor = document.createElement('a');
+    mockAnchor.click = mockClick as unknown as HTMLAnchorElement['click'];
+    const mockCreateElement = vi.spyOn(document, 'createElement').mockReturnValue(mockAnchor);
     const mockCreateObjectURL = vi.fn().mockReturnValue('blob:test');
     const mockRevokeObjectURL = vi.fn();
-    (URL as any).createObjectURL = mockCreateObjectURL;
-    (URL as any).revokeObjectURL = mockRevokeObjectURL;
+    const urlObj = URL as unknown as Record<string, unknown>;
+    urlObj.createObjectURL = mockCreateObjectURL;
+    urlObj.revokeObjectURL = mockRevokeObjectURL;
 
     act(() => result.current.exportChat());
 
@@ -101,8 +97,6 @@ describe('useSession', () => {
     expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:test');
 
     mockCreateElement.mockRestore();
-    mockAppendChild.mockRestore();
-    mockRemoveChild.mockRestore();
   });
 
   it('returns empty string when exporting empty chat', () => {
