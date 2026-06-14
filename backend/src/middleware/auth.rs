@@ -73,7 +73,7 @@ pub async fn auth_middleware(
     mut req: axum::extract::Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let claims = {
+    let (token, claims) = {
         let token = req
             .headers()
             .get("Authorization")
@@ -81,14 +81,21 @@ pub async fn auth_middleware(
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or(AppError::Auth(AuthError::MissingToken))?;
 
-        decode::<Claims>(
+        let claims = decode::<Claims>(
             token,
             &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
             &Validation::new(Algorithm::HS256),
         )
         .map_err(|_| AppError::Auth(AuthError::InvalidToken))?
-        .claims
+        .claims;
+
+        (token.to_string(), claims)
     };
+
+    // 检查 token 是否在黑名单中（已登出）
+    if state.auth_service.is_token_blacklisted(&state.pool, &token).await? {
+        return Err(AppError::Auth(AuthError::InvalidToken));
+    }
 
     req.extensions_mut().insert(AuthUser {
         user_id: claims.sub,

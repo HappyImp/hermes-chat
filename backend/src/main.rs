@@ -74,14 +74,22 @@ async fn main() {
     };
 
     // 创建路由
-    let auth_routes = Router::new()
+    // 公开的认证路由（无需登录）
+    let auth_public_routes = Router::new()
         .route("/register", post(handlers::auth::register))
         .route("/login", post(handlers::auth::login));
+
+    // 需要登录的认证路由
+    let auth_protected_routes = Router::new()
+        .route("/logout", post(handlers::auth::logout))
+        .route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware));
+
+    let auth_routes = auth_public_routes.merge(auth_protected_routes);
 
     let session_routes = Router::new()
         .route("/", get(handlers::session::list))
         .route("/", post(handlers::session::create))
-        .route("/{id}", delete(handlers::session::delete));
+        .route("/:id", delete(handlers::session::delete));
 
     let chat_routes = Router::new()
         .route("/completions", post(handlers::chat::completions));

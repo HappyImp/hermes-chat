@@ -68,7 +68,9 @@ ExecStart=/root/hermes-chat/backend/target/release/hermes-chat-backend
 WorkingDirectory=/root/hermes-chat/backend
 Environment=JWT_SECRET=your-secret-key
 Environment=DATABASE_URL=sqlite:hermes.db?mode=rwc
+Environment=RUST_LOG=info
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -92,6 +94,12 @@ sudo journalctl -u hermes-chat-backend -f
 |------|------|------|--------|
 | POST | /api/auth/register | 注册 | 201 |
 | POST | /api/auth/login | 登录 | 200 |
+
+### 认证（需 JWT）
+
+| 方法 | 路径 | 说明 | 状态码 |
+|------|------|------|--------|
+| POST | /api/auth/logout | 登出（token 加入黑名单） | 200 |
 
 ### 会话（需 JWT）
 
@@ -129,6 +137,7 @@ sudo journalctl -u hermes-chat-backend -f
 - `sessions` — 会话表（关联 user_id，软删除）
 - `messages` — 消息表（关联 session_id）
 - `permissions` — 员工权限表（user_id + employee 唯一约束）
+- `token_blacklist` — Token 黑名单（登出后 token 失效）
 
 ## 环境变量
 

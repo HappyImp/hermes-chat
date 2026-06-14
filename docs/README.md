@@ -14,6 +14,7 @@
 | [prd/2026-06-14_pixel-office.md](prd/2026-06-14_pixel-office.md) | 2026-06-14 | 像素风办公室 PRD |
 | [prd/2026-06-14_employee-async-task.md](prd/2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
 | [prd/2026-06-14_rust-backend-account-system.md](prd/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统 PRD |
+| [prd/2026-06-14_auth-logout.md](prd/2026-06-14_auth-logout.md) | 2026-06-14 | 登出功能 (Token 黑名单) PRD |
 
 ## 🏗️ 设计拆解 (docs/design/)
 
@@ -25,6 +26,7 @@
 | [design/2026-06-14_employee-async-task-design.md](design/2026-06-14_employee-async-task-design.md) | 2026-06-14 | F6 员工异步任务设计 |
 | [design/2026-06-14_rust-backend-account-system.md](design/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统技术设计 |
 | [design/2026-06-14_auth-login-register-design.md](design/2026-06-14_auth-login-register-design.md) | 2026-06-14 | 登录/注册功能设计 |
+| [design/2026-06-14_auth-logout-design.md](design/2026-06-14_auth-logout-design.md) | 2026-06-14 | 登出功能 (Token 黑名单) 设计 |
 
 ## 🧠 架构文档 (docs/architecture/)
 
@@ -62,4 +64,5 @@
 | [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
 | [backlog/2026-06-14_46952be-review-backlog.md](backlog/2026-06-14_46952be-review-backlog.md) | 2026-06-14 | SSE+状态修复审查待优化清单（8 项） |
 | [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
-| [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |
+|| [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |
+|| [backlog/2026-06-14_auth-login-register-review.md](backlog/2026-06-14_auth-login-register-review.md) | 2026-06-14 | 登录/注册功能审查（1🟡+2🟢） |

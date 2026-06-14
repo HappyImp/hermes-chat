@@ -40,3 +40,18 @@ export async function register(
     throw new Error(data.message || `注册失败 (${res.status})`);
   }
 }
+
+export async function logout(token: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const data: AuthResponse = await res.json().catch(() => ({}));
+    throw new Error(data.message || `登出失败 (${res.status})`);
+  }
+}

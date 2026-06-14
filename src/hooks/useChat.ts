@@ -219,7 +219,7 @@ async function attemptSend(opts: {
     });
 
     if (resp.status === 401) {
-      useAuthStore.getState().logout();
+      await useAuthStore.getState().logout();
       throw new Error('认证已过期，请重新登录');
     }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

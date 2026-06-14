@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore, getAuthToken } from '../authStore';
+
+// mock 掉 auth API 避免真实网络请求
+vi.mock('../../api/auth', () => ({
+  logout: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('authStore', () => {
   beforeEach(() => {
@@ -26,9 +31,9 @@ describe('authStore', () => {
     expect(state.username).toBe('alice');
   });
 
-  it('logout 清除认证状态', () => {
+  it('logout 清除认证状态', async () => {
     useAuthStore.getState().login('test-token', 'alice');
-    useAuthStore.getState().logout();
+    await useAuthStore.getState().logout();
     const state = useAuthStore.getState();
     expect(state.isAuthenticated).toBe(false);
     expect(state.token).toBeNull();
