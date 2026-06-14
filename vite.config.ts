@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => {
       // Proxy /chat/v1/*  → Hermes API Server /v1/*  (chat completions)
       proxy: {
         '/chat/api': {
-          target: 'http://127.0.0.1:8642',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/chat\/api/, '/api'),
           headers: {
@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
           },
         },
         '/chat/v1': {
-          target: 'http://127.0.0.1:8642',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/chat\/v1/, '/v1'),
           headers: {
