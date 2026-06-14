@@ -3,3 +3,5 @@ dist
 *.local
 .vite
 coverage
+backend/target/
+backend/hermes.db
