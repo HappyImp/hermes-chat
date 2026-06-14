@@ -35,26 +35,26 @@ describe('Sidebar', () => {
 
   it('renders when open', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     expect(screen.getByText('Hermes Chat')).toBeInTheDocument();
   });
 
   it('shows channel list', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     expect(screen.getByText(/# default/)).toBeInTheDocument();
   });
 
   it('shows session list', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     expect(screen.getAllByText(/新会话/).length).toBeGreaterThan(0);
   });
 
   it('calls onClose when overlay clicked', () => {
     const onClose = vi.fn();
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={onClose} />);
+    render(<Sidebar isOpen={true} onClose={onClose} onOpenOffice={vi.fn()} />);
     const overlay = document.querySelector('.fixed.inset-0');
     if (overlay) fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe('Sidebar', () => {
 
   it('creates new session on button click', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     const btn = screen.getByText('+ 新会话');
     fireEvent.click(btn);
     expect(useSessionStore.getState().sessions['default']).toHaveLength(2);
@@ -70,7 +70,7 @@ describe('Sidebar', () => {
 
   it('shows new channel input', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     const btn = screen.getByText('+ 新建');
     fireEvent.click(btn);
     expect(screen.getByPlaceholderText('channel 名称')).toBeInTheDocument();
@@ -78,13 +78,13 @@ describe('Sidebar', () => {
 
   it('shows employee status button', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     expect(screen.getByText('员工状态')).toBeInTheDocument();
   });
 
   it('shows employee status panel when button clicked', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     const btn = screen.getByText('员工状态');
     fireEvent.click(btn);
     expect(screen.getByText(/员工状态/)).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('Sidebar', () => {
 
   it('returns to main sidebar when back clicked in employee panel', () => {
     useSessionStore.getState().createSession('default');
-    render(<Sidebar isOpen={true} onClose={vi.fn()} />);
+    render(<Sidebar isOpen={true} onClose={vi.fn()} onOpenOffice={vi.fn()} />);
     // Open employee panel
     fireEvent.click(screen.getByText('员工状态'));
     expect(screen.getByText('老财')).toBeInTheDocument();

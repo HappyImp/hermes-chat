@@ -4,6 +4,7 @@ import { useEmployeeStatus } from '@/hooks/useEmployeeStatus';
 
 interface EmployeeStatusProps {
   onBack: () => void;
+  onOpenOffice: () => void;
 }
 
 function EmployeeCard({ employee }: { employee: Employee }) {
@@ -40,7 +41,7 @@ function EmployeeCard({ employee }: { employee: Employee }) {
   );
 }
 
-export function EmployeeStatus({ onBack }: EmployeeStatusProps) {
+export function EmployeeStatus({ onBack, onOpenOffice }: EmployeeStatusProps) {
   const { employees, lastUpdated, refresh } = useEmployeeStatus();
 
   const workingCount = employees.filter((e) => e.status === 'working').length;
@@ -65,6 +66,21 @@ export function EmployeeStatus({ onBack }: EmployeeStatusProps) {
           title="刷新"
         >
           🔄
+        </button>
+      </div>
+
+      {/* Office button */}
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <button
+          onClick={onOpenOffice}
+          className="w-full py-1.5 px-3 rounded text-xs font-medium cursor-pointer border-none transition-colors"
+          style={{
+            backgroundColor: '#4488CC',
+            color: '#FFFFFF',
+          }}
+          title="进入办公室"
+        >
+          🏢 进入办公室
         </button>
       </div>
 

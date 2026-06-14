@@ -7,9 +7,10 @@ import { EmployeeStatus } from './EmployeeStatus';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenOffice: () => void;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, onOpenOffice }: SidebarProps) {
   const [showEmployees, setShowEmployees] = useState(false);
   const {
     sessions,
@@ -74,7 +75,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {showEmployees ? (
           /* Employee status panel */
-          <EmployeeStatus onBack={handleBackFromEmployees} />
+          <EmployeeStatus
+            onBack={handleBackFromEmployees}
+            onOpenOffice={onOpenOffice}
+          />
         ) : (
           <>
             {/* Channel list */}

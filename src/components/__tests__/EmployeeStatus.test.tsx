@@ -4,6 +4,7 @@ import { EmployeeStatus } from '../Sidebar/EmployeeStatus';
 import { useEmployeeStatus } from '@/hooks/useEmployeeStatus';
 
 const mockRefresh = vi.fn();
+const mockOnOpenOffice = vi.fn();
 
 vi.mock('@/hooks/useEmployeeStatus', () => ({
   useEmployeeStatus: vi.fn(),
@@ -40,6 +41,7 @@ describe('EmployeeStatus', () => {
   beforeEach(() => {
     localStorage.clear();
     mockRefresh.mockClear();
+    mockOnOpenOffice.mockClear();
     vi.mocked(useEmployeeStatus).mockReturnValue({
       employees: defaultEmployees,
       lastUpdated: new Date('2026-06-14T10:00:00'),
@@ -48,47 +50,47 @@ describe('EmployeeStatus', () => {
   });
 
   it('renders the panel header', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText(/员工状态/)).toBeInTheDocument();
   });
 
   it('shows all employees', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText('老财')).toBeInTheDocument();
     expect(screen.getByText('铁壳')).toBeInTheDocument();
     expect(screen.getByText('裁判君')).toBeInTheDocument();
   });
 
   it('shows employee roles', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText('AI操盘手')).toBeInTheDocument();
     expect(screen.getByText('AI运维工程师')).toBeInTheDocument();
     expect(screen.getByText('AI审查官')).toBeInTheDocument();
   });
 
   it('shows current tasks', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText('盘前研判分析')).toBeInTheDocument();
     expect(screen.getByText('待命中')).toBeInTheDocument();
     expect(screen.getByText('休息中')).toBeInTheDocument();
   });
 
   it('shows task tags', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText('盘前研判')).toBeInTheDocument();
     expect(screen.getByText('每日日报')).toBeInTheDocument();
     expect(screen.getByText('按需审查')).toBeInTheDocument();
   });
 
   it('shows status summary with working count', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
-    expect(screen.getByText('1')).toBeInTheDocument(); // 1 person working
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
+    expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText(/人工作中/)).toBeInTheDocument();
     expect(screen.getByText(/共 3 人/)).toBeInTheDocument();
   });
 
   it('shows status labels', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText('工作中')).toBeInTheDocument();
     expect(screen.getByText('待命')).toBeInTheDocument();
     expect(screen.getByText('休息')).toBeInTheDocument();
@@ -96,14 +98,14 @@ describe('EmployeeStatus', () => {
 
   it('calls onBack when back button clicked', () => {
     const onBack = vi.fn();
-    render(<EmployeeStatus onBack={onBack} />);
+    render(<EmployeeStatus onBack={onBack} onOpenOffice={mockOnOpenOffice} />);
     const backBtn = screen.getByTitle('返回');
     fireEvent.click(backBtn);
     expect(onBack).toHaveBeenCalled();
   });
 
   it('calls refresh when refresh button clicked', () => {
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     const refreshBtn = screen.getByTitle('刷新');
     fireEvent.click(refreshBtn);
     expect(mockRefresh).toHaveBeenCalled();
@@ -115,9 +117,19 @@ describe('EmployeeStatus', () => {
       lastUpdated: new Date(),
       refresh: mockRefresh,
     });
-    
-    render(<EmployeeStatus onBack={vi.fn()} />);
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText(/共 0 人/)).toBeInTheDocument();
-    expect(screen.getByText('0')).toBeInTheDocument(); // 0 working
+    expect(screen.getByText('0')).toBeInTheDocument();
+  });
+
+  it('renders the office button', () => {
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
+    expect(screen.getByTitle('进入办公室')).toBeInTheDocument();
+  });
+
+  it('calls onOpenOffice when office button clicked', () => {
+    render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
+    fireEvent.click(screen.getByTitle('进入办公室'));
+    expect(mockOnOpenOffice).toHaveBeenCalled();
   });
 });
