@@ -6,9 +6,9 @@
 ## 测试结果
 
 ```
-Test Files  27 passed (27)
-Tests       194 passed (194)
-Duration    6.14s
+Test Files  33 passed (33)
+Tests       265 passed (265)
+Duration    6.97s
 ```
 
 ## 测试文件清单
@@ -22,8 +22,9 @@ Duration    6.14s
 | useEmployeeStatus.test.ts | 8 | ✅ |
 | mergeWithActive.test.ts | 10 | ✅ |
 | sessionStore.test.ts | 12 | ✅ |
+| authStore.test.ts | 5 | ✅ |
 | markdown.test.ts | 8 | ✅ |
-| App.test.tsx | 3 | ✅ |
+| App.test.tsx | 4 | ✅ |
 | Toast.test.tsx | 2 | ✅ |
 | Welcome.test.tsx | 1 | ✅ |
 | MessageBubble.test.tsx | 7 | ✅ |
