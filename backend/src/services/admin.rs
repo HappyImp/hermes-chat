@@ -521,6 +521,79 @@ impl AdminService {
         Ok(())
     }
 
+    /// 查询审计日志（分页 + 筛选）
+    pub async fn get_audit_logs(
+        &self,
+        pool: &DbPool,
+        user_id: Option<&str>,
+        action: Option<&str>,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+        page: i32,
+        per_page: i32,
+    ) -> Result<serde_json::Value, AppError> {
+        let offset = (page - 1) * per_page;
+
+        // 动态拼接 WHERE 条件
+        let mut conditions: Vec<String> = Vec::new();
+        if user_id.is_some() { conditions.push("operator_id = ?".into()); }
+        if action.is_some() { conditions.push("action = ?".into()); }
+        if start_date.is_some() { conditions.push("created_at >= ?".into()); }
+        if end_date.is_some() { conditions.push("created_at <= ?".into()); }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        let count_sql = format!("SELECT COUNT(*) FROM audit_logs {}", where_clause);
+        let query_sql = format!(
+            "SELECT id, operator_id, action, target_type, target_id, detail, created_at FROM audit_logs {} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            where_clause
+        );
+
+        // 绑定参数的闭包
+        let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+        if let Some(uid) = user_id { count_query = count_query.bind(uid); }
+        if let Some(act) = action { count_query = count_query.bind(act); }
+        if let Some(sd) = start_date { count_query = count_query.bind(sd); }
+        if let Some(ed) = end_date { count_query = count_query.bind(ed); }
+
+        let total: i64 = count_query.fetch_one(pool).await?;
+
+        let mut data_query = sqlx::query_as::<_, crate::models::audit_log::AuditLog>(&query_sql);
+        if let Some(uid) = user_id { data_query = data_query.bind(uid); }
+        if let Some(act) = action { data_query = data_query.bind(act); }
+        if let Some(sd) = start_date { data_query = data_query.bind(sd); }
+        if let Some(ed) = end_date { data_query = data_query.bind(ed); }
+        data_query = data_query.bind(per_page).bind(offset);
+
+        let logs = data_query.fetch_all(pool).await?;
+
+        let log_list: Vec<serde_json::Value> = logs
+            .into_iter()
+            .map(|l| {
+                serde_json::json!({
+                    "id": l.id,
+                    "operator_id": l.operator_id,
+                    "action": l.action,
+                    "target_type": l.target_type,
+                    "target_id": l.target_id,
+                    "detail": l.detail,
+                    "created_at": l.created_at,
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!({
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "logs": log_list
+        }))
+    }
+
     // ==================== 授权码生成 ====================
 
     fn generate_code() -> String {

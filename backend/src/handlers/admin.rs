@@ -41,7 +41,24 @@ pub struct UpdatePermissionsRequest {
     pub allowed_employees: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AuditLogParams {
+    #[serde(default)]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub action: Option<String>,
+    #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
+    #[serde(default = "default_page")]
+    pub page: i32,
+    #[serde(default = "default_per_page")]
+    pub per_page: i32,
+}
+
 fn default_page() -> i32 { 1 }
+fn default_per_page() -> i32 { 20 }
 fn default_limit() -> i32 { 20 }
 fn default_status() -> String { "all".to_string() }
 
@@ -161,4 +178,25 @@ pub async fn dashboard(
     let admin_svc = AdminService::new();
     let stats = admin_svc.dashboard_stats(&state.pool).await?;
     Ok(Json(stats))
+}
+
+// ==================== 审计日志 ====================
+
+/// GET /api/admin/audit-logs
+pub async fn get_audit_logs(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Query(params): Query<AuditLogParams>,
+) -> Result<Json<Value>, AppError> {
+    let admin_svc = AdminService::new();
+    let result = admin_svc.get_audit_logs(
+        &state.pool,
+        params.user_id.as_deref(),
+        params.action.as_deref(),
+        params.start_date.as_deref(),
+        params.end_date.as_deref(),
+        params.page,
+        params.per_page,
+    ).await?;
+    Ok(Json(result))
 }

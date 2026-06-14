@@ -89,7 +89,8 @@ async fn main() {
         .route("/users/:id", get(handlers::admin::get_user_detail))
         .route("/users/:id/permissions", put(handlers::admin::update_user_permissions))
         .route("/users/:id/toggle-status", post(handlers::admin::toggle_user_status))
-        .route("/users/:id", delete(handlers::admin::delete_user));
+        .route("/users/:id", delete(handlers::admin::delete_user))
+        .route("/audit-logs", get(handlers::admin::get_audit_logs));
 
     let cleanup_pool = state.pool.clone();
     let cleanup_auth = state.auth_service.clone();
