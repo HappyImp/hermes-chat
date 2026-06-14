@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { renderMarkdown, generateId } from '@/utils';
 
-const API_URL = '/chat/api/v1/chat/completions';
+const API_URL = '/chat/v1/chat/completions';
 
 function parseSSEChunk(buffer: string, full: string): [string, string] {
   const lines = buffer.split('\n');
