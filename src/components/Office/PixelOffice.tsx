@@ -33,7 +33,7 @@ interface BubbleState {
 function drawWall(
   ctx: CanvasRenderingContext2D,
   w: number,
-  h: number,
+  _h: number,
   scale: number,
 ): void {
   const wallH = 12 * scale;
