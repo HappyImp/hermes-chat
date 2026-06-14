@@ -6,6 +6,7 @@ pub struct User {
     pub username: String,
     pub password_hash: String,
     pub role: String,
+    pub enabled: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -14,6 +15,7 @@ pub struct User {
 pub struct CreateUser {
     pub username: String,
     pub password: String,
+    pub invitation_code: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -9,7 +9,7 @@ mod utils;
 
 use axum::{
     middleware as axum_middleware,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower_http::trace::TraceLayer;
@@ -97,9 +97,21 @@ async fn main() {
     let employee_routes = Router::new()
         .route("/", get(handlers::employee::list));
 
+    // 后台管理路由（全部需要 admin 权限）
     let admin_routes = Router::new()
+        // 仪表盘
+        .route("/dashboard", get(handlers::admin::dashboard))
+        // 授权码管理
+        .route("/invitation-codes", post(handlers::admin::create_invitation_codes))
+        .route("/invitation-codes", get(handlers::admin::list_invitation_codes))
+        .route("/invitation-codes/:id/disable", post(handlers::admin::disable_invitation_code))
+        .route("/invitation-codes/:id", delete(handlers::admin::delete_invitation_code))
+        // 用户管理
         .route("/users", get(handlers::admin::list_users))
-        .route("/permissions", post(handlers::admin::set_permission));
+        .route("/users/:id", get(handlers::admin::get_user_detail))
+        .route("/users/:id/permissions", put(handlers::admin::update_user_permissions))
+        .route("/users/:id/toggle-status", post(handlers::admin::toggle_user_status))
+        .route("/users/:id", delete(handlers::admin::delete_user));
 
     // 启动定时清理过期黑名单任务（每小时执行一次）
     let cleanup_pool = state.pool.clone();

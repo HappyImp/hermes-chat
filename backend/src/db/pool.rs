@@ -13,6 +13,7 @@ pub async fn create_pool(database_url: &str, max_connections: u32) -> Result<DbP
 }
 
 pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
+    // 基础表
     sqlx::query(
         "
         CREATE TABLE IF NOT EXISTS users (
@@ -20,6 +21,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
+            enabled INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -68,6 +70,66 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
     )
     .execute(pool)
     .await?;
+
+    // 授权码表（003）
+    sqlx::query(
+        "
+        CREATE TABLE IF NOT EXISTS invitation_codes (
+            id TEXT PRIMARY KEY,
+            code TEXT NOT NULL UNIQUE,
+            allowed_employees TEXT NOT NULL,
+            max_uses INTEGER NOT NULL DEFAULT 1,
+            used_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_by TEXT NOT NULL,
+            used_by TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT,
+            note TEXT,
+            FOREIGN KEY (created_by) REFERENCES users(id),
+            FOREIGN KEY (used_by) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_invitation_codes_code ON invitation_codes(code);
+        CREATE INDEX IF NOT EXISTS idx_invitation_codes_status ON invitation_codes(status);
+        "
+    )
+    .execute(pool)
+    .await?;
+
+    // 审计日志表（004）
+    sqlx::query(
+        "
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id TEXT PRIMARY KEY,
+            operator_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT,
+            detail TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (operator_id) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_operator ON audit_logs(operator_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+        "
+    )
+    .execute(pool)
+    .await?;
+
+    // 预置管理员（005）— 密码: 123456
+    sqlx::query(
+        "INSERT OR IGNORE INTO users (id, username, password_hash, role, created_at, updated_at)
+         VALUES ('admin-preset-001', '13459730010', '$2b$12$GCsrCf3yeh/GKQ1wnTibkuf089IuZ4/t.9.sx6BCTt1dhAOcgBtja', 'admin', datetime('now'), datetime('now'))"
+    )
+    .execute(pool)
+    .await?;
+
+    // 兼容旧数据库：尝试添加 enabled 字段（已存在的表会失败，忽略）
+    let _ = sqlx::query("ALTER TABLE users ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+        .execute(pool)
+        .await;
 
     Ok(())
 }

@@ -97,6 +97,17 @@ pub async fn auth_middleware(
         return Err(AppError::Auth(AuthError::InvalidToken));
     }
 
+    // 检查用户是否被禁用
+    let enabled: i32 = sqlx::query_scalar("SELECT enabled FROM users WHERE id = ?")
+        .bind(&claims.sub)
+        .fetch_optional(&state.pool)
+        .await?
+        .unwrap_or(0);
+
+    if enabled == 0 {
+        return Err(AppError::Auth(AuthError::InvalidToken));
+    }
+
     req.extensions_mut().insert(AuthUser {
         user_id: claims.sub,
         role: claims.role,
