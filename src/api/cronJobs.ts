@@ -2,7 +2,7 @@
 export interface ActiveEmployeeEntry {
   task: string;
   startedAt: string;
-  status?: 'working' | 'completed';
+  status?: 'working' | 'completed' | 'failed' | 'timeout';
   pid?: number;
 }
 

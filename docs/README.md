@@ -13,6 +13,7 @@
 | [prd/2026-06-14_shell-hooks.md](prd/2026-06-14_shell-hooks.md) | 2026-06-14 | Shell Hooks 自动追踪 PRD |
 | [prd/2026-06-14_pixel-office.md](prd/2026-06-14_pixel-office.md) | 2026-06-14 | 像素风办公室 PRD |
 | [prd/2026-06-14_employee-async-task.md](prd/2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
+| [prd/2026-06-14_rust-backend-account-system.md](prd/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统 PRD |
 
 ## 🏗️ 设计拆解 (docs/design/)
 
@@ -22,12 +23,22 @@
 | [design/2026-06-14_employee-status-design.md](design/2026-06-14_employee-status-design.md) | 2026-06-14 | 员工状态面板设计 |
 | [design/2026-06-14_pixel-office-design.md](design/2026-06-14_pixel-office-design.md) | 2026-06-14 | 像素风办公室设计 |
 | [design/2026-06-14_employee-async-task-design.md](design/2026-06-14_employee-async-task-design.md) | 2026-06-14 | F6 员工异步任务设计 |
+| [design/2026-06-14_rust-backend-account-system.md](design/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统技术设计 |
 
 ## 🧠 架构文档 (docs/architecture/)
 
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [architecture/README.md](architecture/README.md) | 2026-06-14 | 系统架构文档 |
+
+## ⚙️ 后端文档 (backend/docs/)
+
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [backend/docs/README.md](../backend/docs/README.md) | 2026-06-14 | 后端文档清单索引 |
+| [backend/docs/prd/2026-06-14_rust-backend.md](../backend/docs/prd/2026-06-14_rust-backend.md) | 2026-06-14 | 后端功能 PRD（账户/会话/权限/SSE代理） |
+| [backend/docs/design/2026-06-14_rust-backend-impl.md](../backend/docs/design/2026-06-14_rust-backend-impl.md) | 2026-06-14 | 后端实现设计（技术栈/schema/认证/安全） |
+| [backend/docs/backlog/2026-06-14_review-backlog.md](../backend/docs/backlog/2026-06-14_review-backlog.md) | 2026-06-14 | 后端审查记录（2🔴+12🟡，已全部修复） |
 
 ## 🧪 测试文档 (docs/test/)
 
@@ -50,3 +61,4 @@
 | [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
 | [backlog/2026-06-14_46952be-review-backlog.md](backlog/2026-06-14_46952be-review-backlog.md) | 2026-06-14 | SSE+状态修复审查待优化清单（8 项） |
 | [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
+| [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |

@@ -1,20 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateId } from '@/utils';
 import { fetchActiveEmployees } from '@/api/cronJobs';
-
-/** 任务状态类型 */
-export type TaskStatus = 'pending' | 'working' | 'completed' | 'failed' | 'timeout';
-
-/** 任务信息 */
-export interface TaskInfo {
-  id: string;
-  employee: string;
-  task: string;
-  status: TaskStatus;
-  startedAt: Date;
-  result?: string;
-  error?: string;
-}
+import type { TaskInfo } from '@/types';
 
 /** API 响应类型 */
 interface DispatchResponse {
@@ -115,6 +102,17 @@ export function useEmployeeTask() {
   }, []);
 
   /**
+   * 停止指定任务的轮询
+   */
+  const stopPolling = useCallback((taskId: string) => {
+    const timer = pollingTimers.current.get(taskId);
+    if (timer) {
+      clearTimeout(timer);
+      pollingTimers.current.delete(taskId);
+    }
+  }, []);
+
+  /**
    * 轮询任务状态
    */
   useEffect(() => {
@@ -125,28 +123,19 @@ export function useEmployeeTask() {
         const active = await fetchActiveEmployees();
         const entry = active[taskInfo.employee];
 
+        // 任务已结束的状态：completed / failed / timeout
         if (entry?.status === 'completed') {
           updateTaskStatus(taskId, {
             status: 'completed',
             result: entry.task,
           });
-          // 停止轮询
-          const timer = pollingTimers.current.get(taskId);
-          if (timer) {
-            clearTimeout(timer);
-            pollingTimers.current.delete(taskId);
-          }
-        } else if (entry?.status === 'failed') {
+          stopPolling(taskId);
+        } else if (entry?.status === 'failed' || entry?.status === 'timeout') {
           updateTaskStatus(taskId, {
-            status: 'failed',
+            status: entry.status,
             error: entry.task,
           });
-          // 停止轮询
-          const timer = pollingTimers.current.get(taskId);
-          if (timer) {
-            clearTimeout(timer);
-            pollingTimers.current.delete(taskId);
-          }
+          stopPolling(taskId);
         }
       } catch (error) {
         console.error('轮询任务状态失败:', error);

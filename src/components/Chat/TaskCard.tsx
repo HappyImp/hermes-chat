@@ -1,4 +1,4 @@
-import type { TaskInfo } from '@/hooks/useEmployeeTask';
+import type { TaskInfo } from '@/types';
 
 /** 状态图标映射 */
 const STATUS_ICON: Record<TaskInfo['status'], string> = {
