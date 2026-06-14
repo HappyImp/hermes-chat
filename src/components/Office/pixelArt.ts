@@ -65,6 +65,25 @@ export function drawSprite(
   }
 }
 
+/** Draw a pre-rendered image sprite with pixel-perfect scaling */
+export function drawImageSprite(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | null,
+  x: number,
+  y: number,
+  scale: number,
+): void {
+  if (!img) return;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(
+    img,
+    x * scale,
+    y * scale,
+    img.width * scale,
+    img.height * scale,
+  );
+}
+
 /** Floor tile pattern (16x16) */
 export function createFloorPattern(
   ctx: CanvasRenderingContext2D,
@@ -78,6 +97,26 @@ export function createFloorPattern(
       const isAlt = ((x / tileSize) + (y / tileSize)) % 2 === 0;
       ctx.fillStyle = isAlt ? PALETTE.floor : PALETTE.floorDark;
       ctx.fillRect(x * scale, y * scale, tileSize * scale, tileSize * scale);
+    }
+  }
+}
+
+/** Tile an image across an area */
+export function fillWithTile(
+  ctx: CanvasRenderingContext2D,
+  tile: HTMLImageElement,
+  areaX: number,
+  areaY: number,
+  areaW: number,
+  areaH: number,
+  scale: number,
+): void {
+  ctx.imageSmoothingEnabled = false;
+  const tw = tile.width * scale;
+  const th = tile.height * scale;
+  for (let y = areaY; y < areaY + areaH; y += th) {
+    for (let x = areaX; x < areaX + areaW; x += tw) {
+      ctx.drawImage(tile, x, y, tw, th);
     }
   }
 }

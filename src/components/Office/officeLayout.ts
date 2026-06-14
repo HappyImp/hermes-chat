@@ -1,5 +1,6 @@
 import type { Employee } from '@/types/employee';
 import type { PixelGrid } from './pixelArt';
+import type { OfficeSprites } from './spriteLoader';
 import {
   SITTING_SPRITE,
   TYPING_1,
@@ -26,6 +27,20 @@ export function getSpriteForState(state: AnimationState): PixelGrid | null {
     case 'typing1': return TYPING_1;
     case 'typing2': return TYPING_2;
     case 'standing': return STANDING_SPRITE;
+    case 'empty': return null;
+  }
+}
+
+/** Get image sprite for current animation state */
+export function getImageForState(
+  state: AnimationState,
+  sprites: OfficeSprites,
+): HTMLImageElement | null {
+  switch (state) {
+    case 'sitting': return sprites.sitting;
+    case 'typing1': return sprites.typing1;
+    case 'typing2': return sprites.typing2;
+    case 'standing': return sprites.standing;
     case 'empty': return null;
   }
 }

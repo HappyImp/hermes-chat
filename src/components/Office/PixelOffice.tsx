@@ -1,15 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { Employee } from '@/types/employee';
-import { PALETTE, createFloorPattern, drawSprite } from './pixelArt';
-import {
-  DESK_SPRITE,
-  MONITOR_SPRITE,
-  CHAIR_SPRITE,
-  COFFEE_SPRITE,
-} from './sprites';
+import { drawImageSprite, fillWithTile } from './pixelArt';
+import { loadOfficeSprites, type OfficeSprites } from './spriteLoader';
 import {
   getAnimationState,
-  getSpriteForState,
+  getImageForState,
   getDeskLayouts,
   calcScale,
   type DeskLayout,
@@ -29,43 +24,26 @@ interface BubbleState {
   visible: boolean;
 }
 
-/** Draw the wall background */
+/** Draw the wall background using tile image */
 function drawWall(
   ctx: CanvasRenderingContext2D,
   w: number,
-  _h: number,
+  wallH: number,
   scale: number,
+  tile: HTMLImageElement,
 ): void {
-  const wallH = 12 * scale;
-  ctx.fillStyle = PALETTE.wall;
-  ctx.fillRect(0, 0, w, wallH);
-  ctx.fillStyle = PALETTE.wallLight;
-  ctx.fillRect(0, 0, w, scale * 2);
-  ctx.fillStyle = PALETTE.wallDark;
-  ctx.fillRect(0, wallH - scale * 2, w, scale * 2);
+  fillWithTile(ctx, tile, 0, 0, w, wallH, scale);
 }
 
 /** Draw a window on the wall */
-function drawWindow(
+function drawWindowSprite(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   scale: number,
+  img: HTMLImageElement,
 ): void {
-  const w = 16 * scale;
-  const h = 10 * scale;
-  ctx.fillStyle = PALETTE.wallDark;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = '#AADDFF';
-  ctx.fillRect(x + scale, y + scale, w - 2 * scale, h - 2 * scale);
-  ctx.strokeStyle = PALETTE.wallDark;
-  ctx.lineWidth = scale;
-  ctx.beginPath();
-  ctx.moveTo(x + w / 2, y);
-  ctx.lineTo(x + w / 2, y + h);
-  ctx.moveTo(x, y + h / 2);
-  ctx.lineTo(x + w, y + h / 2);
-  ctx.stroke();
+  drawImageSprite(ctx, img, x, y, scale);
 }
 
 /** Draw a complete workstation (desk + monitor + chair) */
@@ -74,10 +52,10 @@ function drawWorkstation(
   lx: number,
   ly: number,
   scale: number,
+  sprites: OfficeSprites,
 ): void {
-  drawSprite(ctx, DESK_SPRITE, lx, ly + 10, scale);
-  drawSprite(ctx, MONITOR_SPRITE, lx + 6, ly + 2, scale);
-  drawSprite(ctx, CHAIR_SPRITE, lx + 7, ly + 22, scale);
+  drawImageSprite(ctx, sprites.desk, lx, ly, scale);
+  drawImageSprite(ctx, sprites.chair, lx + 14, ly + 18, scale);
 }
 
 /** Draw status indicator dot above character */
@@ -88,18 +66,16 @@ function drawStatusDot(
   status: Employee['status'],
   frame: number,
   scale: number,
+  sprites: OfficeSprites,
 ): void {
-  const colors = {
-    working: PALETTE.statusGreen,
-    standby: PALETTE.statusYellow,
-    off: PALETTE.statusGray,
-  };
-  const alpha = 0.5 + 0.5 * Math.sin(frame * 0.15);
-  ctx.globalAlpha = status === 'off' ? 0.4 : alpha;
-  ctx.fillStyle = colors[status];
-  ctx.beginPath();
-  ctx.arc(cx * scale, cy * scale, 2 * scale, 0, Math.PI * 2);
-  ctx.fill();
+  const statusImg = status === 'working'
+    ? sprites.statusWorking
+    : status === 'standby'
+      ? sprites.statusStandby
+      : sprites.statusOff;
+  const alpha = status === 'off' ? 0.4 : 0.5 + 0.5 * Math.sin(frame * 0.15);
+  ctx.globalAlpha = alpha;
+  drawImageSprite(ctx, statusImg, cx, cy, scale);
   ctx.globalAlpha = 1;
 }
 
@@ -111,7 +87,7 @@ function drawLabel(
   y: number,
   scale: number,
 ): void {
-  ctx.fillStyle = PALETTE.white;
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = `bold ${scale * 3}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(text, cx * scale, y * scale);
@@ -143,6 +119,12 @@ export function PixelOffice({ employees, onBack }: PixelOfficeProps) {
   const [bubble, setBubble] = useState<BubbleState>({
     index: -1, x: 0, y: 0, text: '', visible: false,
   });
+  const [sprites, setSprites] = useState<OfficeSprites | null>(null);
+
+  /** Load sprites once on mount */
+  useEffect(() => {
+    loadOfficeSprites().then(setSprites).catch(console.error);
+  }, []);
 
   /** Handle window resize */
   const handleResize = useCallback(() => {
@@ -162,7 +144,7 @@ export function PixelOffice({ employees, onBack }: PixelOfficeProps) {
   /** Main render loop */
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !sprites) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const { w, h } = canvasSize;
@@ -171,40 +153,43 @@ export function PixelOffice({ employees, onBack }: PixelOfficeProps) {
     const scale = calcScale(w);
     const layouts = getDeskLayouts(w / scale, h / scale);
 
+    if (!sprites) return;
+    const sp = sprites;
     function render(): void {
       if (!ctx) return;
       frameRef.current++;
       const frame = frameRef.current;
       ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = false;
 
-      // Background
-      drawWall(ctx, w, h, scale);
-      createFloorPattern(ctx, w / scale, h / scale, scale);
+      // Background: tiled wall + floor
+      const wallH = 12 * scale;
+      drawWall(ctx, w, wallH, scale, sp.wallTile);
+      fillWithTile(ctx, sp.floorTile, 0, wallH, w, h - wallH, scale);
 
       // Windows on wall
-      drawWindow(ctx, w * 0.2, scale, scale);
-      drawWindow(ctx, w * 0.6, scale, scale);
+      drawWindowSprite(ctx, w * 0.18, scale * 2, scale, sp.window);
+      drawWindowSprite(ctx, w * 0.58, scale * 2, scale, sp.window);
 
       // Draw each workstation + character
       layouts.forEach((desk, i) => {
         const emp = employees[i];
         if (!emp) return;
-        drawWorkstation(ctx, desk.x, desk.y, scale);
+        drawWorkstation(ctx, desk.x, desk.y, scale, sp);
 
         const animState = getAnimationState(emp.status, frame);
-        const sprite = getSpriteForState(animState);
+        const charImg = getImageForState(animState, sp);
 
-        // Draw character
-        if (sprite) {
-          const charX = desk.x + 4;
-          const charY = desk.y + 20;
-          drawSprite(ctx, sprite, charX, charY, scale);
+        if (charImg) {
+          const charX = desk.x + 8;
+          const charY = desk.y + 8;
+          drawImageSprite(ctx, charImg, charX, charY, scale);
           drawStatusDot(
-            ctx, charX + 8, charY - 2, emp.status, frame, scale,
+            ctx, charX + 12, charY - 2, emp.status, frame, scale, sp,
           );
         } else {
-          // Empty chair pulled out
-          drawSprite(ctx, COFFEE_SPRITE, desk.x + 20, desk.y + 26, scale);
+          // Empty desk — show coffee cup
+          drawImageSprite(ctx, sp.coffee, desk.x + 18, desk.y + 12, scale);
         }
 
         drawLabel(ctx, desk.label, desk.x + 12, desk.y + 40, scale);
@@ -215,7 +200,7 @@ export function PixelOffice({ employees, onBack }: PixelOfficeProps) {
 
     render();
     return () => cancelAnimationFrame(animRef.current);
-  }, [canvasSize, employees]);
+  }, [canvasSize, employees, sprites]);
 
   /** Handle canvas click → show bubble */
   const handleCanvasClick = useCallback(
