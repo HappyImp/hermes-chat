@@ -29,6 +29,7 @@ struct AppState {
     auth_service: AuthService,
     employee_service: EmployeeService,
     hermes_client: HermesClient,
+    jwt_secret: String,
 }
 
 #[tokio::main]
@@ -69,6 +70,7 @@ async fn main() {
         auth_service,
         employee_service: EmployeeService::new(),
         hermes_client,
+        jwt_secret: config.jwt.secret.clone(),
     };
 
     // 创建路由
@@ -93,10 +95,10 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api/auth", auth_routes)
-        .nest("/api/sessions", session_routes.route_layer(axum_middleware::from_fn(auth_middleware)))
-        .nest("/api/chat", chat_routes.route_layer(axum_middleware::from_fn(auth_middleware)))
-        .nest("/api/employees", employee_routes.route_layer(axum_middleware::from_fn(auth_middleware)))
-        .nest("/api/admin", admin_routes.route_layer(axum_middleware::from_fn(auth_middleware)))
+        .nest("/api/sessions", session_routes.route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware)))
+        .nest("/api/chat", chat_routes.route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware)))
+        .nest("/api/employees", employee_routes.route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware)))
+        .nest("/api/admin", admin_routes.route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware)))
         .layer(cors_layer(&config.security.allowed_origins))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
