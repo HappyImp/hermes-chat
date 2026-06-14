@@ -43,8 +43,7 @@ export async function fetchCronJobs(): Promise<CronJob[]> {
   }
 }
 
-/**
- * Map a cron job name to an employee name.
+/** Map a cron job name to an employee name.
  * Returns null if no match.
  */
 export function mapJobNameToEmployee(jobName: string): string | null {
@@ -52,6 +51,8 @@ export function mapJobNameToEmployee(jobName: string): string | null {
   if (jobName.includes('铁壳')) return '铁壳';
   if (jobName.includes('小K') || jobName.includes('早报')) return '小K';
   if (jobName.includes('404')) return '404';
+  if (jobName.includes('裁判君')) return '裁判君';
+  if (jobName.includes('Ditto') || jobName.includes('ditto')) return 'Ditto';
   return null;
 }
 
@@ -59,25 +60,21 @@ export function mapJobNameToEmployee(jobName: string): string | null {
  * Derive an employee's working status from their cron jobs.
  *
  * Rules:
- * - Any job with last_run_at within 5 minutes → 'working'
- * - Any job with next_run_at within 30 minutes → 'standby'
- * - Any enabled job scheduled → 'standby' (waiting for next run)
+ * - Any job with state === 'running' → 'working'
+ * - Any job with next_run_at within 30 minutes → 'standby' (high priority)
+ * - Any enabled job with next_run_at → 'standby' (waiting for next run)
  * - Otherwise → 'off'
  */
 export function deriveEmployeeStatus(
   jobs: CronJob[],
   now: Date = new Date(),
 ): { status: 'working' | 'standby' | 'off'; currentTask: string } {
-  const FIVE_MIN = 5 * 60 * 1000;
   const THIRTY_MIN = 30 * 60 * 1000;
 
-  // Check if any job recently ran (working)
+  // Check if any job is currently running
   for (const job of jobs) {
-    if (job.last_run_at) {
-      const lastRun = new Date(job.last_run_at).getTime();
-      if (now.getTime() - lastRun < FIVE_MIN) {
-        return { status: 'working', currentTask: job.name };
-      }
+    if (job.state === 'running') {
+      return { status: 'working', currentTask: job.name };
     }
   }
 
@@ -127,15 +124,15 @@ export function deriveEmployeeStatus(
 
 /**
  * Fetch active employees from shell hooks status file.
- * Uses the /chat/api proxy (Nginx proxies this to the backend).
+ * Production: reads static file /chat/data/employees-active.json (Nginx serves directly).
+ * Dev: Vite middleware intercepts and reads /tmp/employees-active.json.
+ * Returns empty object if file doesn't exist (not an error).
  */
 export async function fetchActiveEmployees(): Promise<
   Record<string, ActiveEmployeeEntry>
 > {
   try {
-    const res = await fetch(`${API_BASE}/employees/active`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const res = await fetch('/chat/data/employees-active.json');
     if (!res.ok) return {};
     return await res.json();
   } catch {

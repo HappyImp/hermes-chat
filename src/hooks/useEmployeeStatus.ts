@@ -7,26 +7,40 @@ import {
   fetchActiveEmployees,
 } from '@/api/cronJobs';
 import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
-import employeesData from '@/data/employees.json';
 
-function validateEmployee(data: unknown): data is Employee {
-  if (!data || typeof data !== 'object') return false;
-  const emp = data as Record<string, unknown>;
-  return (
-    typeof emp.name === 'string' &&
-    typeof emp.role === 'string' &&
-    typeof emp.avatar === 'string' &&
-    typeof emp.status === 'string' &&
-    ['working', 'standby', 'off'].includes(emp.status) &&
-    typeof emp.currentTask === 'string' &&
-    Array.isArray(emp.tasks) &&
-    emp.tasks.every((t: unknown) => typeof t === 'string')
-  );
+/** Default employee metadata (role, avatar, tasks) for known employees */
+const EMPLOYEE_META: Record<string, { role: string; avatar: string; tasks: string[] }> = {
+  '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'] },
+  '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
+  '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
+  '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['每日日报', '开发任务'] },
+  '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
+  'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
+};
+
+/** Create a default employee object for a given name */
+function createDefaultEmployee(name: string): Employee {
+  const meta = EMPLOYEE_META[name];
+  if (meta) {
+    return {
+      name,
+      role: meta.role,
+      avatar: meta.avatar,
+      status: 'off' as const,
+      currentTask: '休息中',
+      tasks: meta.tasks,
+    };
+  }
+  // Unknown employee: use generic metadata
+  return {
+    name,
+    role: 'AI员工',
+    avatar: '👤',
+    status: 'off' as const,
+    currentTask: '休息中',
+    tasks: [],
+  };
 }
-
-const typedEmployees: Employee[] = (employeesData.employees as unknown[])
-  .filter(validateEmployee)
-  .map((emp) => emp as Employee);
 
 function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
   const grouped = new Map<string, CronJob[]>();
@@ -40,17 +54,31 @@ function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
   return grouped;
 }
 
-function mergeWithDefaults(defaults: Employee[], jobs: CronJob[]): Employee[] {
-  const grouped = groupJobsByEmployee(jobs);
+/** Extract unique employee names from cron jobs */
+function extractEmployeesFromJobs(jobs: CronJob[]): string[] {
+  const names = new Set<string>();
+  for (const job of jobs) {
+    const name = mapJobNameToEmployee(job.name);
+    if (name) names.add(name);
+  }
+  return Array.from(names);
+}
 
-  return defaults.map((emp) => {
-    const empJobs = grouped.get(emp.name);
+function mergeWithDefaults(defaults: Map<string, Employee>, jobs: CronJob[]): Employee[] {
+  const grouped = groupJobsByEmployee(jobs);
+  const result: Employee[] = [];
+
+  for (const [name, emp] of defaults) {
+    const empJobs = grouped.get(name);
     if (!empJobs || empJobs.length === 0) {
-      return { ...emp, status: 'off' as const, currentTask: '休息中' };
+      result.push({ ...emp, status: 'off' as const, currentTask: '休息中' });
+    } else {
+      const { status, currentTask } = deriveEmployeeStatus(empJobs);
+      result.push({ ...emp, status, currentTask });
     }
-    const { status, currentTask } = deriveEmployeeStatus(empJobs);
-    return { ...emp, status, currentTask };
-  });
+  }
+
+  return result;
 }
 
 /**
@@ -72,7 +100,7 @@ export function mergeWithActive(
 }
 
 export function useEmployeeStatus() {
-  const [employees, setEmployees] = useState<Employee[]>(typedEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const refresh = useCallback(async () => {
@@ -81,10 +109,31 @@ export function useEmployeeStatus() {
         fetchCronJobs(),
         fetchActiveEmployees(),
       ]);
-      const merged = mergeWithDefaults(typedEmployees, jobs);
+
+      // Always start with all known employees
+      const defaults = new Map<string, Employee>();
+      for (const name of Object.keys(EMPLOYEE_META)) {
+        defaults.set(name, createDefaultEmployee(name));
+      }
+
+      // Add any additional employees from cron jobs or active entries
+      for (const name of extractEmployeesFromJobs(jobs)) {
+        if (!defaults.has(name)) {
+          defaults.set(name, createDefaultEmployee(name));
+        }
+      }
+      for (const name of Object.keys(active)) {
+        if (!defaults.has(name)) {
+          defaults.set(name, createDefaultEmployee(name));
+        }
+      }
+
+      const merged = mergeWithDefaults(defaults, jobs);
       setEmployees(mergeWithActive(merged, active));
     } catch {
-      // On error, keep current state as fallback
+      // On error, show all known employees as off
+      const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
+      setEmployees(fallback);
     }
     setLastUpdated(new Date());
   }, []);

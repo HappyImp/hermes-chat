@@ -13,21 +13,29 @@ vi.mock('@/api/cronJobs', () => ({
 const mockFetchCronJobs = vi.mocked(cronJobsApi.fetchCronJobs);
 const mockMapJobNameToEmployee = vi.mocked(cronJobsApi.mapJobNameToEmployee);
 const mockDeriveEmployeeStatus = vi.mocked(cronJobsApi.deriveEmployeeStatus);
+const mockFetchActiveEmployees = vi.mocked(cronJobsApi.fetchActiveEmployees);
 
 describe('useEmployeeStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: API returns empty (fallback to static data)
+    // Default: API returns empty (fallback to all known employees)
     mockFetchCronJobs.mockResolvedValue([]);
+    mockFetchActiveEmployees.mockResolvedValue({});
   });
 
-  it('returns 5 employees from default data when API returns empty', async () => {
+  it('returns all known employees when API returns empty and no active entries', async () => {
     const { result } = renderHook(() => useEmployeeStatus());
     await waitFor(() => {
-      expect(result.current.employees).toHaveLength(5);
+      expect(result.current.employees.length).toBeGreaterThan(0);
     });
-    expect(result.current.employees[0].name).toBe('老财');
-    expect(result.current.employees[4].name).toBe('裁判君');
+    // Should include all known employees from EMPLOYEE_META
+    const names = result.current.employees.map(e => e.name);
+    expect(names).toContain('老财');
+    expect(names).toContain('铁壳');
+    expect(names).toContain('小K');
+    expect(names).toContain('404');
+    expect(names).toContain('裁判君');
+    expect(names).toContain('Ditto');
   });
 
   it('returns a lastUpdated date', async () => {
@@ -44,17 +52,7 @@ describe('useEmployeeStatus', () => {
     });
   });
 
-  it('falls back to default employees when API returns empty', async () => {
-    mockFetchCronJobs.mockResolvedValue([]);
-    const { result } = renderHook(() => useEmployeeStatus());
-    await waitFor(() => {
-      expect(result.current.employees).toHaveLength(5);
-    });
-    // Default data has 老财 as 'working' from JSON
-    expect(result.current.employees[0].name).toBe('老财');
-  });
-
-  it('maps API jobs to employee status', async () => {
+  it('shows employees from cron jobs', async () => {
     const mockJobs = [
       {
         id: '1',
@@ -66,22 +64,11 @@ describe('useEmployeeStatus', () => {
         schedule: { kind: 'cron', expr: '25 9 * * 1-5', display: '25 9 * * 1-5' },
         last_status: null,
       },
-      {
-        id: '2',
-        name: '铁壳日报',
-        enabled: true,
-        state: 'scheduled',
-        last_run_at: null,
-        next_run_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        schedule: { kind: 'cron', expr: '0 12 * * *', display: '0 12 * * *' },
-        last_status: null,
-      },
     ];
 
     mockFetchCronJobs.mockResolvedValue(mockJobs);
     mockMapJobNameToEmployee.mockImplementation((name: string) => {
       if (name.includes('老财')) return '老财';
-      if (name.includes('铁壳')) return '铁壳';
       return null;
     });
     mockDeriveEmployeeStatus.mockReturnValue({
@@ -94,8 +81,10 @@ describe('useEmployeeStatus', () => {
       expect(mockFetchCronJobs).toHaveBeenCalled();
     });
 
-    // Should still have 5 employees (merged with defaults)
-    expect(result.current.employees).toHaveLength(5);
+    // Should include 老财 from cron jobs + all other known employees
+    const names = result.current.employees.map(e => e.name);
+    expect(names).toContain('老财');
+    expect(names).toContain('Ditto');
   });
 
   it('updates lastUpdated on refresh', async () => {
@@ -121,13 +110,28 @@ describe('useEmployeeStatus', () => {
     expect(mockFetchCronJobs).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to defaults on API error', async () => {
+  it('falls back to all known employees on API error', async () => {
     mockFetchCronJobs.mockRejectedValue(new Error('network'));
     const { result } = renderHook(() => useEmployeeStatus());
-    // fetchCronJobs catches errors internally and returns [],
-    // but let's test the case where it throws unexpectedly
     await waitFor(() => {
-      expect(result.current.employees).toHaveLength(5);
+      expect(result.current.employees.length).toBeGreaterThan(0);
+    });
+    const names = result.current.employees.map(e => e.name);
+    expect(names).toContain('Ditto');
+  });
+
+  it('includes employees from active entries', async () => {
+    mockFetchCronJobs.mockResolvedValue([]);
+    mockFetchActiveEmployees.mockResolvedValue({
+      'Ditto': { task: '测试中', startedAt: '2026-06-14T10:00:00Z' },
+    });
+
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      const ditto = result.current.employees.find(e => e.name === 'Ditto');
+      expect(ditto).toBeDefined();
+      expect(ditto?.status).toBe('working');
+      expect(ditto?.currentTask).toBe('测试中');
     });
   });
 });
