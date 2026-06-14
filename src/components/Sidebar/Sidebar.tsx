@@ -59,7 +59,7 @@ export function Sidebar({ isOpen, onClose, onOpenOffice }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={`fixed lg:relative z-40 h-screen w-[260px] bg-surface border-r border-border flex flex-col transition-transform duration-200 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:hidden'
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Header */}
