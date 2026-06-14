@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
     pub hermes: HermesConfig,
+    #[allow(dead_code)]
     pub rate_limit: RateLimitConfig,
     pub security: SecurityConfig,
 }
@@ -36,11 +37,13 @@ pub struct HermesConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct RateLimitConfig {
+    #[allow(dead_code)]
     pub max_requests_per_minute: usize,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct SecurityConfig {
+    #[allow(dead_code)]
     pub max_message_length: usize,
     pub allowed_origins: Vec<String>,
 }

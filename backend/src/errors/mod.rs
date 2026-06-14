@@ -19,6 +19,7 @@ pub enum AppError {
 pub enum AuthError {
     MissingToken,
     InvalidToken,
+    #[allow(dead_code)]
     ExpiredToken,
     WrongPassword,
     UserNotFound,

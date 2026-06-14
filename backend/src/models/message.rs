@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Message {
     pub id: String,
@@ -10,12 +11,14 @@ pub struct Message {
     pub created_at: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CreateMessage {
     pub role: String,
     pub content: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct MessageResponse {
     pub id: String,
@@ -35,6 +38,7 @@ impl From<Message> for MessageResponse {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct MessageListResponse {
     pub messages: Vec<MessageResponse>,

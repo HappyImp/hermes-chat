@@ -5,9 +5,11 @@ use crate::db::DbPool;
 use crate::errors::AppError;
 use crate::models::message::{Message, MessageResponse, MessageListResponse};
 
+#[allow(dead_code)]
 pub struct ChatService;
 
 impl ChatService {
+    #[allow(dead_code)]
     pub async fn get_messages(
         pool: &DbPool,
         session_id: &str,
@@ -36,6 +38,7 @@ impl ChatService {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn save_message(
         pool: &DbPool,
         session_id: &str,

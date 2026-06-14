@@ -69,6 +69,7 @@ impl SessionService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn get_by_id(pool: &DbPool, session_id: &str) -> Result<Session, AppError> {
         let session = sqlx::query_as::<_, Session>(
             "SELECT * FROM sessions WHERE id = ? AND deleted_at IS NULL"

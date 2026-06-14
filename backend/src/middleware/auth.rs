@@ -70,6 +70,7 @@ where
 /// 管理员提取器 — 同时验证 JWT 和 admin 角色
 #[derive(Clone)]
 pub struct AdminUser {
+    #[allow(dead_code)]
     pub user_id: String,
 }
 

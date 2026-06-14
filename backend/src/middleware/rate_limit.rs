@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::time::Instant;
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct RateLimiter {
     requests: Arc<Mutex<HashMap<String, Vec<Instant>>>>,
@@ -10,6 +11,7 @@ pub struct RateLimiter {
     window_secs: u64,
 }
 
+#[allow(dead_code)]
 impl RateLimiter {
     pub fn new(max_requests: usize, window_secs: u64) -> Self {
         Self {

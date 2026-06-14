@@ -39,5 +39,6 @@ impl EmployeeService {
 #[derive(Debug, Deserialize, sqlx::FromRow)]
 struct PermissionRow {
     pub employee: String,
+    #[allow(dead_code)]
     pub allowed: i32,
 }

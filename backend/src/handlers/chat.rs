@@ -12,11 +12,14 @@ use crate::errors::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::hermes::HermesMessage;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ChatRequest {
+    #[allow(dead_code)]
     pub session_id: String,
     pub employee: String,
     pub messages: Vec<ChatMessage>,
+    #[allow(dead_code)]
     pub stream: Option<bool>,
 }
 
