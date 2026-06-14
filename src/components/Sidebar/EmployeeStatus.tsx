@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import type { Employee } from '@/types/employee';
 import { getStatusLabel, getStatusColor } from '@/types/employee';
 import { useEmployeeStatus } from '@/hooks/useEmployeeStatus';
@@ -28,9 +27,9 @@ function EmployeeCard({ employee }: { employee: Employee }) {
         <span className="text-primary">{employee.currentTask}</span>
       </div>
       <div className="flex flex-wrap gap-1">
-        {employee.tasks.map((task) => (
+        {employee.tasks.map((task, index) => (
           <span
-            key={task}
+            key={`${employee.name}-${task}-${index}`}
             className="inline-block px-1.5 py-0.5 text-[11px] rounded bg-surface text-text2 border border-border"
           >
             {task}
@@ -43,10 +42,6 @@ function EmployeeCard({ employee }: { employee: Employee }) {
 
 export function EmployeeStatus({ onBack }: EmployeeStatusProps) {
   const { employees, lastUpdated, refresh } = useEmployeeStatus();
-
-  const handleRefresh = useCallback(() => {
-    refresh();
-  }, [refresh]);
 
   const workingCount = employees.filter((e) => e.status === 'working').length;
 
@@ -65,7 +60,7 @@ export function EmployeeStatus({ onBack }: EmployeeStatusProps) {
           <span className="text-sm font-semibold text-text">👥 员工状态</span>
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={refresh}
           className="text-text2 bg-transparent border-none cursor-pointer hover:text-text text-sm"
           title="刷新"
         >

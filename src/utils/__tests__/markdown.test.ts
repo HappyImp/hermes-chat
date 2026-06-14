@@ -1,27 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown, escapeHtml } from '../markdown';
-
-describe('escapeHtml', () => {
-  it('escapes ampersand', () => {
-    expect(escapeHtml('a & b')).toBe('a &amp; b');
-  });
-
-  it('escapes angle brackets', () => {
-    expect(escapeHtml('<script>')).toBe('&lt;script&gt;');
-  });
-
-  it('escapes quotes', () => {
-    expect(escapeHtml('"hello"')).toBe('&quot;hello&quot;');
-  });
-
-  it('handles empty string', () => {
-    expect(escapeHtml('')).toBe('');
-  });
-
-  it('handles text without special chars', () => {
-    expect(escapeHtml('hello world')).toBe('hello world');
-  });
-});
+import { renderMarkdown } from '../markdown';
+import { marked } from 'marked';
 
 describe('renderMarkdown', () => {
   it('renders bold text', () => {
@@ -53,5 +32,24 @@ describe('renderMarkdown', () => {
   it('handles empty string', () => {
     const result = renderMarkdown('');
     expect(typeof result).toBe('string');
+  });
+
+  it('falls back to escaped text on error', () => {
+    // Mock marked.parse to throw an error
+    const originalParse = marked.parse;
+    marked.parse = () => { throw new Error('Test error'); };
+    
+    const result = renderMarkdown('test & <script>alert(1)</script>');
+    expect(result).toContain('test &amp;');
+    expect(result).toContain('&lt;script&gt;');
+    expect(result).not.toContain('<script>');
+    
+    // Restore original
+    marked.parse = originalParse;
+  });
+
+  it('sanitizes XSS in markdown output', () => {
+    const result = renderMarkdown('<img src=x onerror=alert(1)>');
+    expect(result).not.toContain('onerror');
   });
 });

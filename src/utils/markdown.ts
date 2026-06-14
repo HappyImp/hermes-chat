@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import hljs from 'highlight.js';
+import DOMPurify from 'dompurify';
 
 function createRenderer() {
   const renderer = new marked.Renderer();
@@ -18,7 +19,8 @@ function createRenderer() {
 
 export function renderMarkdown(content: string): string {
   try {
-    return marked.parse(content, { renderer: createRenderer(), breaks: true, gfm: true }) as string;
+    const raw = marked.parse(content, { renderer: createRenderer(), breaks: true, gfm: true }) as string;
+    return DOMPurify.sanitize(raw, { ADD_ATTR: ['target'] });
   } catch {
     return content
       .replace(/&/g, '&amp;')
@@ -26,12 +28,4 @@ export function renderMarkdown(content: string): string {
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
   }
-}
-
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

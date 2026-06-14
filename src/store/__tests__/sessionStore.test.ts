@@ -29,7 +29,7 @@ describe('sessionStore', () => {
 
   it('adds message to current session', () => {
     useSessionStore.getState().createSession('default');
-    useSessionStore.getState().addMessage({ role: 'user', content: 'hello' });
+    useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'hello' });
     const session = useSessionStore.getState().getCurrentSession();
     expect(session?.messages).toHaveLength(1);
     expect(session?.messages[0].content).toBe('hello');
@@ -39,6 +39,7 @@ describe('sessionStore', () => {
   it('derives title from first user message', () => {
     useSessionStore.getState().createSession('default');
     useSessionStore.getState().addMessage({
+      id: 'test-id',
       role: 'user',
       content: 'This is a very long message that should be truncated at 20 characters',
     });
@@ -48,7 +49,7 @@ describe('sessionStore', () => {
 
   it('updates last message', () => {
     useSessionStore.getState().createSession('default');
-    useSessionStore.getState().addMessage({ role: 'assistant', content: '' });
+    useSessionStore.getState().addMessage({ id: 'test-id', role: 'assistant', content: '' });
     useSessionStore.getState().updateLastMessage('updated content');
     const session = useSessionStore.getState().getCurrentSession();
     expect(session?.messages[0].content).toBe('updated content');
@@ -64,7 +65,7 @@ describe('sessionStore', () => {
 
   it('clears current messages', () => {
     useSessionStore.getState().createSession('default');
-    useSessionStore.getState().addMessage({ role: 'user', content: 'test' });
+    useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'test' });
     useSessionStore.getState().clearCurrentMessages();
     const session = useSessionStore.getState().getCurrentSession();
     expect(session?.messages).toHaveLength(0);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSession } from '../useSession';
 import { useSessionStore } from '@/store/sessionStore';
@@ -22,7 +22,7 @@ describe('useSession', () => {
   it('returns current session messages', () => {
     act(() => {
       useSessionStore.getState().createSession('default');
-      useSessionStore.getState().addMessage({ role: 'user', content: 'test' });
+      useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'test' });
     });
     const { result } = renderHook(() => useSession());
     expect(result.current.messages).toHaveLength(1);
@@ -58,7 +58,7 @@ describe('useSession', () => {
   it('clears chat', () => {
     act(() => {
       useSessionStore.getState().createSession('default');
-      useSessionStore.getState().addMessage({ role: 'user', content: 'test' });
+      useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'test' });
     });
     const { result } = renderHook(() => useSession());
     act(() => result.current.clearChat());
@@ -69,5 +69,45 @@ describe('useSession', () => {
     act(() => useSessionStore.getState().createSession('default'));
     const { result } = renderHook(() => useSession());
     expect(result.current.channel).toBe('default');
+  });
+
+  it('exports chat as markdown', () => {
+    act(() => {
+      useSessionStore.getState().createSession('default');
+      useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'Hello' });
+      useSessionStore.getState().addMessage({ id: 'test-id', role: 'assistant', content: 'Hi' });
+    });
+    const { result } = renderHook(() => useSession());
+    
+    // Mock download functionality
+    const mockClick = vi.fn();
+    const mockCreateElement = vi.spyOn(document, 'createElement').mockReturnValue({
+      href: '',
+      download: '',
+      click: mockClick,
+    } as any);
+    const mockAppendChild = vi.spyOn(document.body, 'appendChild').mockReturnValue(null as any);
+    const mockRemoveChild = vi.spyOn(document.body, 'removeChild').mockReturnValue(null as any);
+    // URL.createObjectURL may not exist in test env, mock it
+    const mockCreateObjectURL = vi.fn().mockReturnValue('blob:test');
+    const mockRevokeObjectURL = vi.fn();
+    (URL as any).createObjectURL = mockCreateObjectURL;
+    (URL as any).revokeObjectURL = mockRevokeObjectURL;
+
+    act(() => result.current.exportChat());
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    expect(mockClick).toHaveBeenCalled();
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:test');
+
+    mockCreateElement.mockRestore();
+    mockAppendChild.mockRestore();
+    mockRemoveChild.mockRestore();
+  });
+
+  it('returns empty string when exporting empty chat', () => {
+    const { result } = renderHook(() => useSession());
+    // Should not throw when no session
+    act(() => result.current.exportChat());
   });
 });

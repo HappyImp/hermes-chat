@@ -46,8 +46,8 @@ describe('ChatArea', () => {
 
   it('renders messages', () => {
     useSessionStore.getState().createSession('default');
-    useSessionStore.getState().addMessage({ role: 'user', content: 'hello' });
-    useSessionStore.getState().addMessage({ role: 'assistant', content: 'hi' });
+    useSessionStore.getState().addMessage({ id: 'test-id', role: 'user', content: 'hello' });
+    useSessionStore.getState().addMessage({ id: 'test-id', role: 'assistant', content: 'hi' });
     render(<ChatArea />);
     expect(screen.getByText('hello')).toBeInTheDocument();
     expect(screen.getByText('hi')).toBeInTheDocument();

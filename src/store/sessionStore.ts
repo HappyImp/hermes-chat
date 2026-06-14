@@ -34,6 +34,27 @@ function deriveTitle(messages: Message[]): string {
   return text.length < firstUser.content.length ? text + '...' : text;
 }
 
+/**
+ * Helper to update current session in store.
+ * Reduces duplication in addMessage, updateLastMessage, clearCurrentMessages.
+ */
+function updateCurrentSession(
+  state: SessionStore,
+  updater: (session: Session) => Session,
+): Partial<SessionStore> {
+  const channel = state.currentChannel;
+  const sessions = state.sessions[channel] || [];
+  const idx = sessions.findIndex((s) => s.id === state.currentSessionId);
+  if (idx === -1) return state;
+  const updated = updater({ ...sessions[idx] });
+  updated.updatedAt = new Date().toISOString();
+  const newSessions = [...sessions];
+  newSessions[idx] = updated;
+  return {
+    sessions: { ...state.sessions, [channel]: newSessions },
+  };
+}
+
 export const useSessionStore = create<SessionStore>()(
   persist(
     (set, get) => ({
@@ -89,59 +110,34 @@ export const useSessionStore = create<SessionStore>()(
       setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
 
       addMessage: (message) => {
-        set((state) => {
-          const channel = state.currentChannel;
-          const sessions = state.sessions[channel] || [];
-          const idx = sessions.findIndex((s) => s.id === state.currentSessionId);
-          if (idx === -1) return state;
-          const updated = { ...sessions[idx] };
-          updated.messages = [...updated.messages, message];
-          updated.updatedAt = new Date().toISOString();
-          updated.title = deriveTitle(updated.messages);
-          const newSessions = [...sessions];
-          newSessions[idx] = updated;
-          return {
-            sessions: { ...state.sessions, [channel]: newSessions },
-          };
-        });
+        set((state) =>
+          updateCurrentSession(state, (session) => ({
+            ...session,
+            messages: [...session.messages, message],
+            title: deriveTitle([...session.messages, message]),
+          })),
+        );
       },
 
       updateLastMessage: (content) => {
-        set((state) => {
-          const channel = state.currentChannel;
-          const sessions = state.sessions[channel] || [];
-          const idx = sessions.findIndex((s) => s.id === state.currentSessionId);
-          if (idx === -1) return state;
-          const updated = { ...sessions[idx] };
-          const msgs = [...updated.messages];
-          if (msgs.length === 0) return state;
-          msgs[msgs.length - 1] = {
-            ...msgs[msgs.length - 1],
-            content,
-          };
-          updated.messages = msgs;
-          updated.updatedAt = new Date().toISOString();
-          const newSessions = [...sessions];
-          newSessions[idx] = updated;
-          return {
-            sessions: { ...state.sessions, [channel]: newSessions },
-          };
-        });
+        set((state) =>
+          updateCurrentSession(state, (session) => {
+            const msgs = [...session.messages];
+            if (msgs.length === 0) return session;
+            msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content };
+            return { ...session, messages: msgs };
+          }),
+        );
       },
 
       clearCurrentMessages: () => {
-        set((state) => {
-          const channel = state.currentChannel;
-          const sessions = state.sessions[channel] || [];
-          const idx = sessions.findIndex((s) => s.id === state.currentSessionId);
-          if (idx === -1) return state;
-          const updated = { ...sessions[idx], messages: [], title: '新会话' };
-          const newSessions = [...sessions];
-          newSessions[idx] = updated;
-          return {
-            sessions: { ...state.sessions, [channel]: newSessions },
-          };
-        });
+        set((state) =>
+          updateCurrentSession(state, (session) => ({
+            ...session,
+            messages: [],
+            title: '新会话',
+          })),
+        );
       },
 
       deleteChannel: (channel) => {

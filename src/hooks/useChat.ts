@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
-import { renderMarkdown } from '@/utils';
+import { renderMarkdown, generateId } from '@/utils';
 
 const API_URL = '/chat/api/v1/chat/completions';
 
@@ -29,8 +29,8 @@ export function useChat() {
     async (text: string) => {
       if (!text.trim()) return;
 
-      addMessage({ role: 'user', content: text });
-      addMessage({ role: 'assistant', content: '' });
+      addMessage({ id: generateId(), role: 'user', content: text });
+      addMessage({ id: generateId(), role: 'assistant', content: '' });
       useSessionStore.setState({ isStreaming: true });
 
       try {

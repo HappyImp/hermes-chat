@@ -66,7 +66,7 @@ export function ChannelList({ currentChannel, onSelect, onDelete }: ChannelListP
                 e.stopPropagation();
                 onDelete(ch);
               }}
-              className="text-xs text-text2 bg-transparent border-none cursor-pointer hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+              className="text-xs text-text2 bg-transparent border-none cursor-pointer hover:text-danger opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               title="删除 channel"
             >
               ✕

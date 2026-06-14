@@ -1,46 +1,50 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EmployeeStatus } from '../Sidebar/EmployeeStatus';
+import { useEmployeeStatus } from '@/hooks/useEmployeeStatus';
 
 const mockRefresh = vi.fn();
 
 vi.mock('@/hooks/useEmployeeStatus', () => ({
-  useEmployeeStatus: () => ({
-    employees: [
-      {
-        name: '老财',
-        role: 'AI操盘手',
-        avatar: '💰',
-        status: 'working',
-        currentTask: '盘前研判分析',
-        tasks: ['盘前研判', '开盘异动', '午盘复盘'],
-      },
-      {
-        name: '铁壳',
-        role: 'AI运维工程师',
-        avatar: '🤖',
-        status: 'standby',
-        currentTask: '待命中',
-        tasks: ['每日日报', '运维护航'],
-      },
-      {
-        name: '裁判君',
-        role: 'AI审查官',
-        avatar: '⚖️',
-        status: 'off',
-        currentTask: '休息中',
-        tasks: ['按需审查'],
-      },
-    ],
-    lastUpdated: new Date('2026-06-14T10:00:00'),
-    refresh: mockRefresh,
-  }),
+  useEmployeeStatus: vi.fn(),
 }));
+
+const defaultEmployees = [
+  {
+    name: '老财',
+    role: 'AI操盘手',
+    avatar: '💰',
+    status: 'working',
+    currentTask: '盘前研判分析',
+    tasks: ['盘前研判', '开盘异动', '午盘复盘'],
+  },
+  {
+    name: '铁壳',
+    role: 'AI运维工程师',
+    avatar: '🤖',
+    status: 'standby',
+    currentTask: '待命中',
+    tasks: ['每日日报', '运维护航'],
+  },
+  {
+    name: '裁判君',
+    role: 'AI审查官',
+    avatar: '⚖️',
+    status: 'off',
+    currentTask: '休息中',
+    tasks: ['按需审查'],
+  },
+];
 
 describe('EmployeeStatus', () => {
   beforeEach(() => {
     localStorage.clear();
     mockRefresh.mockClear();
+    vi.mocked(useEmployeeStatus).mockReturnValue({
+      employees: defaultEmployees,
+      lastUpdated: new Date('2026-06-14T10:00:00'),
+      refresh: mockRefresh,
+    });
   });
 
   it('renders the panel header', () => {
@@ -103,5 +107,17 @@ describe('EmployeeStatus', () => {
     const refreshBtn = screen.getByTitle('刷新');
     fireEvent.click(refreshBtn);
     expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it('handles empty employee list', () => {
+    vi.mocked(useEmployeeStatus).mockReturnValueOnce({
+      employees: [],
+      lastUpdated: new Date(),
+      refresh: mockRefresh,
+    });
+    
+    render(<EmployeeStatus onBack={vi.fn()} />);
+    expect(screen.getByText(/共 0 人/)).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument(); // 0 working
   });
 });

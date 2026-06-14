@@ -43,7 +43,7 @@ export function ChatArea() {
         {messages.length === 0 ? (
           <Welcome />
         ) : (
-          messages.map((msg, i) => <MessageBubble key={i} message={msg} />)
+          messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
         )}
         {isStreaming && messages.length > 0 && messages[messages.length - 1].content === '' && (
           <div className="flex gap-1 p-1">

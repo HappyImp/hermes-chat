@@ -4,7 +4,28 @@ import { fetchCronJobs, mapJobNameToEmployee, deriveEmployeeStatus } from '@/api
 import type { CronJob } from '@/api/cronJobs';
 import employeesData from '@/data/employees.json';
 
-const typedEmployees = employeesData.employees as unknown as Employee[];
+/**
+ * Runtime validation for employee data from JSON.
+ * Ensures the data structure matches Employee type.
+ */
+function validateEmployee(data: unknown): data is Employee {
+  if (!data || typeof data !== 'object') return false;
+  const emp = data as Record<string, unknown>;
+  return (
+    typeof emp.name === 'string' &&
+    typeof emp.role === 'string' &&
+    typeof emp.avatar === 'string' &&
+    typeof emp.status === 'string' &&
+    ['working', 'standby', 'off'].includes(emp.status) &&
+    typeof emp.currentTask === 'string' &&
+    Array.isArray(emp.tasks) &&
+    emp.tasks.every((t: unknown) => typeof t === 'string')
+  );
+}
+
+const typedEmployees: Employee[] = (employeesData.employees as unknown[])
+  .filter(validateEmployee)
+  .map((emp) => emp as Employee);
 
 /**
  * Group cron jobs by employee name using mapJobNameToEmployee.
