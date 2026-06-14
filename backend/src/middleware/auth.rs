@@ -9,6 +9,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{AppError, AuthError};
+use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -23,33 +24,7 @@ pub struct AuthUser {
     pub role: String,
 }
 
-/// 读取 JWT_SECRET 环境变量，未设置时 panic
-fn get_jwt_secret() -> String {
-    std::env::var("JWT_SECRET")
-        .expect("JWT_SECRET 环境变量未设置，无法启动服务")
-}
-
-/// 从请求中提取并验证 JWT Claims
-fn extract_claims(parts: &Parts) -> Result<Claims, AppError> {
-    let token = parts
-        .headers
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or(AppError::Auth(AuthError::MissingToken))?;
-
-    let secret = get_jwt_secret();
-
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::new(Algorithm::HS256),
-    )
-    .map_err(|_| AppError::Auth(AuthError::InvalidToken))?;
-
-    Ok(token_data.claims)
-}
-
+/// AuthUser 从 extensions 中提取（由 auth_middleware 注入）
 #[async_trait]
 impl<S> FromRequestParts<S> for AuthUser
 where
@@ -58,16 +33,15 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let claims = extract_claims(parts)?;
-
-        Ok(AuthUser {
-            user_id: claims.sub,
-            role: claims.role,
-        })
+        parts
+            .extensions
+            .get::<AuthUser>()
+            .cloned()
+            .ok_or(AppError::Auth(AuthError::MissingToken))
     }
 }
 
-/// 管理员提取器 — 同时验证 JWT 和 admin 角色
+/// 管理员提取器 — 从 extensions 提取 AuthUser 并验证 admin 角色
 #[derive(Clone)]
 pub struct AdminUser {
     #[allow(dead_code)]
@@ -95,28 +69,30 @@ where
 }
 
 pub async fn auth_middleware(
+    axum::extract::State(state): axum::extract::State<AppState>,
     mut req: axum::extract::Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let token = req
-        .headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or(AppError::Auth(AuthError::MissingToken))?;
+    let claims = {
+        let token = req
+            .headers()
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .ok_or(AppError::Auth(AuthError::MissingToken))?;
 
-    let secret = get_jwt_secret();
-
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::new(Algorithm::HS256),
-    )
-    .map_err(|_| AppError::Auth(AuthError::InvalidToken))?;
+        decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+            &Validation::new(Algorithm::HS256),
+        )
+        .map_err(|_| AppError::Auth(AuthError::InvalidToken))?
+        .claims
+    };
 
     req.extensions_mut().insert(AuthUser {
-        user_id: token_data.claims.sub,
-        role: token_data.claims.role,
+        user_id: claims.sub,
+        role: claims.role,
     });
 
     Ok(next.run(req).await)
