@@ -1,0 +1,21 @@
+[server]
+host = "0.0.0.0"
+port = 3000
+
+[database]
+url = "sqlite:hermes.db?mode=rwc"
+max_connections = 10
+
+[jwt]
+secret = "your-secret-key-change-in-production"
+expires_in_hours = 24
+
+[hermes]
+gateway_url = "http://127.0.0.1:8642"
+
+[rate_limit]
+max_requests_per_minute = 10
+
+[security]
+max_message_length = 10000
+allowed_origins = ["http://localhost:5173", "http://localhost:3000"]
