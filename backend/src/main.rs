@@ -101,6 +101,25 @@ async fn main() {
         .route("/users", get(handlers::admin::list_users))
         .route("/permissions", post(handlers::admin::set_permission));
 
+    // 启动定时清理过期黑名单任务（每小时执行一次）
+    let cleanup_pool = state.pool.clone();
+    let cleanup_auth = state.auth_service.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            match cleanup_auth.cleanup_expired_blacklist(&cleanup_pool).await {
+                Ok(count) if count > 0 => {
+                    tracing::info!("清理过期黑名单记录: {} 条", count);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("清理过期黑名单失败: {:?}", e);
+                }
+            }
+        }
+    });
+
     let app = Router::new()
         .nest("/api/auth", auth_routes)
         .nest("/api/sessions", session_routes.route_layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware)))
