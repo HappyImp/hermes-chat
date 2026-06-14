@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchCronJobs, mapJobNameToEmployee, deriveEmployeeStatus } from '../cronJobs';
+import { fetchCronJobs, mapJobNameToEmployee, deriveEmployeeStatus, fetchActiveEmployees } from '../cronJobs';
 import type { CronJob } from '../cronJobs';
 
 // Helper to create a minimal CronJob
@@ -145,6 +145,19 @@ describe('deriveEmployeeStatus', () => {
     const result = deriveEmployeeStatus(jobs, now);
     expect(result.status).toBe('off');
   });
+
+  it('enabled job with past next_run_at is still standby', () => {
+    const now = new Date('2026-06-14T10:00:00+08:00');
+    const jobs = [
+      makeJob({
+        name: '老财-盘前研判',
+        next_run_at: '2026-06-14T09:00:00+08:00',
+      }),
+    ];
+
+    const result = deriveEmployeeStatus(jobs, now);
+    expect(result.status).toBe('standby');
+  });
 });
 
 describe('fetchCronJobs', () => {
@@ -171,18 +184,58 @@ describe('fetchCronJobs', () => {
   });
 
   it('returns empty array on network error', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
 
     const jobs = await fetchCronJobs();
     expect(jobs).toEqual([]);
   });
+});
 
-  it('returns empty array when response has no jobs field', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 200 }),
-    );
+describe('fetchActiveEmployees', () => {
+  const mockFetch = vi.fn();
 
-    const jobs = await fetchCronJobs();
-    expect(jobs).toEqual([]);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  it('returns parsed data on 200 response', async () => {
+    const data = { '404': { task: '修 bug', startedAt: '2026-06-14T10:00:00Z' } };
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(data) });
+
+    const result = await fetchActiveEmployees();
+    expect(result).toEqual(data);
+    expect(mockFetch).toHaveBeenCalledWith('/chat/data/employees-active.json');
+  });
+
+  it('returns empty object when response is not ok (404)', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+    const result = await fetchActiveEmployees();
+    expect(result).toEqual({});
+  });
+
+  it('returns empty object when file is empty or corrupted JSON', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.reject(new Error('Unexpected token')),
+    });
+
+    const result = await fetchActiveEmployees();
+    expect(result).toEqual({});
+  });
+
+  it('returns empty object on network error', async () => {
+    mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const result = await fetchActiveEmployees();
+    expect(result).toEqual({});
+  });
+
+  it('returns empty object for empty file response', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+
+    const result = await fetchActiveEmployees();
+    expect(result).toEqual({});
   });
 });

@@ -7,15 +7,15 @@
 
 ```
 Test Files  27 passed (27)
-Tests       189 passed (189)
-Duration    5.74s
+Tests       194 passed (194)
+Duration    6.14s
 ```
 
 ## 测试文件清单
 
 | 文件 | 测试数 | 状态 |
 |------|--------|------|
-| cronJobs.test.ts | 17 | ✅ |
+| cronJobs.test.ts | 22 | ✅ |
 | useChat.test.ts | 4 | ✅ |
 | useSession.test.ts | 9 | ✅ |
 | useToast.test.ts | 4 | ✅ |
