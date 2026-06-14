@@ -62,6 +62,12 @@
 |------|------|------|
 | [components/README.md](components/README.md) | 2026-06-14 | 组件清单（含 TaskCard + PixelOffice） |
 
+## 📊 规划文档 (docs/planning/)
+
+| 文档 | 日期 | 说明 |
+|------|------|------|
+| [planning/product-roadmap-2026-06-15.md](planning/product-roadmap-2026-06-15.md) | 2026-06-15 | 产品规划报告（10轮深度探索） |
+
 ## 📌 待优化清单 (docs/backlog/)
 
 | 文档 | 日期 | 说明 |

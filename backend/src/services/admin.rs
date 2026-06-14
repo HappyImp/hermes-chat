@@ -1,5 +1,4 @@
 use chrono::{Duration, Utc};
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::db::DbPool;
@@ -201,7 +200,7 @@ impl AdminService {
 
     // ==================== 用户管理 ====================
 
-    /// 用户列表（支持搜索和分页）
+    /// 用户列表（支持搜索和分页）— LEFT JOIN 优化，消除 N+1
     pub async fn list_users(
         &self,
         pool: &DbPool,
@@ -223,58 +222,62 @@ impl AdminService {
                 .await?
         };
 
-        #[derive(Deserialize, sqlx::FromRow)]
-        struct UserRow {
+        // 主查询：LEFT JOIN 授权码 + 聚合权限（一次查询搞定）
+        #[derive(sqlx::FromRow)]
+        struct UserWithDetails {
             id: String,
             username: String,
             role: String,
             enabled: i32,
             created_at: String,
+            invitation_code: Option<String>,
+            allowed_employees: Option<String>, // JSON 聚合
         }
 
-        let users: Vec<UserRow> = if search.is_empty() {
-            sqlx::query_as("SELECT id, username, role, enabled, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?")
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(pool)
-                .await?
+        let users: Vec<UserWithDetails> = if search.is_empty() {
+            sqlx::query_as(r#"
+                SELECT u.id, u.username, u.role, u.enabled, u.created_at,
+                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code,
+                    (SELECT GROUP_CONCAT(p.employee) FROM permissions p WHERE p.user_id = u.id AND p.allowed = 1) AS allowed_employees
+                FROM users u
+                ORDER BY u.created_at DESC LIMIT ? OFFSET ?
+            "#)
+            .bind(limit).bind(offset)
+            .fetch_all(pool).await?
         } else {
-            sqlx::query_as("SELECT id, username, role, enabled, created_at FROM users WHERE username LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?")
-                .bind(&search_pattern)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(pool)
-                .await?
+            sqlx::query_as(r#"
+                SELECT u.id, u.username, u.role, u.enabled, u.created_at,
+                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code,
+                    (SELECT GROUP_CONCAT(p.employee) FROM permissions p WHERE p.user_id = u.id AND p.allowed = 1) AS allowed_employees
+                FROM users u
+                WHERE u.username LIKE ?
+                ORDER BY u.created_at DESC LIMIT ? OFFSET ?
+            "#)
+            .bind(&search_pattern).bind(limit).bind(offset)
+            .fetch_all(pool).await?
         };
 
-        let mut user_list = Vec::new();
-        for u in users {
-            // 查注册授权码
-            let invitation_code: Option<String> = sqlx::query_scalar(
-                "SELECT code FROM invitation_codes WHERE used_by = ? LIMIT 1"
-            )
-            .bind(&u.id)
-            .fetch_optional(pool)
-            .await?;
-
-            // 查权限列表
-            let employees: Vec<String> = sqlx::query_scalar(
-                "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1"
-            )
-            .bind(&u.id)
-            .fetch_all(pool)
-            .await?;
-
-            user_list.push(serde_json::json!({
-                "id": u.id,
-                "username": u.username,
-                "role": u.role,
-                "enabled": u.enabled == 1,
-                "created_at": u.created_at,
-                "invitation_code": invitation_code,
-                "allowed_employees": employees
-            }));
-        }
+        let user_list: Vec<serde_json::Value> = users
+            .iter()
+            .map(|u| {
+                let employees: Vec<String> = u.allowed_employees
+                    .as_deref()
+                    .unwrap_or("")
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+                serde_json::json!({
+                    "id": u.id,
+                    "username": u.username,
+                    "role": u.role,
+                    "enabled": u.enabled == 1,
+                    "created_at": u.created_at,
+                    "invitation_code": u.invitation_code,
+                    "allowed_employees": employees
+                })
+            })
+            .collect();
 
         Ok(serde_json::json!({
             "total": total,
@@ -406,7 +409,7 @@ impl AdminService {
         Ok(())
     }
 
-    /// 删除用户（级联删除会话、消息、权限、授权码使用记录）
+    /// 删除用户（级联删除会话、消息、权限、授权码使用记录）— 事务保护
     pub async fn delete_user(
         &self,
         pool: &DbPool,
@@ -423,20 +426,25 @@ impl AdminService {
             return Err(AppError::NotFound("用户不存在".to_string()));
         }
 
-        // 级联删除
-        sqlx::query("DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)")
-            .bind(user_id).execute(pool).await?;
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(user_id).execute(pool).await?;
-        sqlx::query("DELETE FROM permissions WHERE user_id = ?")
-            .bind(user_id).execute(pool).await?;
-        sqlx::query("UPDATE invitation_codes SET used_by = NULL WHERE used_by = ?")
-            .bind(user_id).execute(pool).await?;
-        sqlx::query("DELETE FROM token_blacklist WHERE user_id = ?")
-            .bind(user_id).execute(pool).await?;
-        sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(user_id).execute(pool).await?;
+        // 事务：级联删除（原子操作，失败全部回滚）
+        let mut tx = pool.begin().await?;
 
+        sqlx::query("DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)")
+            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM permissions WHERE user_id = ?")
+            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE invitation_codes SET used_by = NULL WHERE used_by = ?")
+            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM token_blacklist WHERE user_id = ?")
+            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(user_id).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+
+        // 审计日志（事务外：operator_id 是管理员，不受删除影响）
         self.log_audit(pool, operator_id, "delete_user", "user", Some(user_id), None).await?;
         Ok(())
     }
@@ -447,11 +455,17 @@ impl AdminService {
         let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
             .fetch_one(pool).await?;
 
-        let today = Utc::now().format("%Y-%m-%d").to_string();
+        // 统一用 RFC3339 格式比较（与 created_at 存储格式一致）
+        let today_start = Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .to_rfc3339();
         let today_new: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM users WHERE created_at >= ?"
         )
-        .bind(&today)
+        .bind(&today_start)
         .fetch_one(pool).await?;
 
         let active_codes: i64 = sqlx::query_scalar(

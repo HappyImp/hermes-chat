@@ -76,11 +76,13 @@ impl AuthService {
             }
         }
 
-        // 创建用户
+        // 事务：创建用户 + 写权限 + 更新授权码（原子操作）
         let id = Uuid::new_v4().to_string();
         let password_hash = hash(&input.password, DEFAULT_COST)
             .map_err(|_| AppError::Auth(AuthError::PasswordHashError))?;
         let now = Utc::now().to_rfc3339();
+
+        let mut tx = pool.begin().await?;
 
         sqlx::query(
             "INSERT INTO users (id, username, password_hash, role, enabled, created_at, updated_at) VALUES (?, ?, ?, 'user', 1, ?, ?)"
@@ -90,7 +92,7 @@ impl AuthService {
         .bind(&password_hash)
         .bind(&now)
         .bind(&now)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
         // 继承授权码的员工权限
@@ -105,7 +107,7 @@ impl AuthService {
             .bind(&perm_id)
             .bind(&id)
             .bind(emp)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
         }
 
@@ -117,10 +119,12 @@ impl AuthService {
         .bind(&id)
         .bind(new_status)
         .bind(&code_row.id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
-        // 生成 token
+        tx.commit().await?;
+
+        // 生成 token（事务外，不涉及数据库）
         let token = self.generate_token(&id, "user")?;
 
         let user = UserResponse {
