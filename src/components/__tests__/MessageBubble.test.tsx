@@ -33,7 +33,6 @@ describe('MessageBubble', () => {
 
   it('renders empty content', () => {
     render(<MessageBubble message={{ id: 'test-id', role: 'assistant', content: '' }} />);
-    // Should not throw
   });
 
   it('escapes HTML in user messages', () => {
@@ -106,7 +105,6 @@ describe('MessageBubble', () => {
     };
 
     const { container } = render(<MessageBubble message={taskMessage} />);
-    // Task card messages are aligned to start (bot side)
     expect(container.firstChild).toHaveClass('self-start');
   });
 });

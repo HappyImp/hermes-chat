@@ -1,6 +1,5 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde_json::{json, Value};
@@ -24,10 +23,10 @@ pub async fn create(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(input): Json<CreateSession>,
-) -> Result<(StatusCode, Json<Value>), AppError> {
+) -> Result<Json<Value>, AppError> {
     let session = SessionService::create(&state.pool, &auth.user_id, input).await?;
 
-    Ok((StatusCode::CREATED, Json(json!(session))))
+    Ok(Json(json!(session)))
 }
 
 pub async fn delete(

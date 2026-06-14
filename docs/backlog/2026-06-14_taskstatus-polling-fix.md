@@ -10,7 +10,7 @@
 
 | # | 问题 | 状态 | 修复说明 |
 |---|------|------|----------|
-| 1 | `ActiveEmployeeEntry.status` 类型声明太窄（只支持 `working\|completed`），导致 `failed` 状态永远不会匹配，失败任务永远轮询不停 | ✅ 已修复 | 扩展类型支持 `working\|completed\|failed\|timeout` |
+| 1 | `ActiveEmployeeEntry.status` 类型声明太窄（只支持 `working|completed`），导致 `failed` 状态永远不会匹配，失败任务永远轮询不停 | ✅ 已修复 | 扩展类型支持 `working|completed|failed|timeout` |
 | 2 | 轮询逻辑未处理 `timeout` 状态 | ✅ 已修复 | 增加 `timeout` 状态处理，与 `failed` 同等对待 |
 
 ---
@@ -24,14 +24,6 @@
 | 3 | dispatch 后同时 sendMessage | ✅ 设计意图 | 用户发送 dispatch 命令时，同时显示任务卡片和 AI 回复，是合理设计 |
 | 4 | XSS 防护 — 确认 `renderMarkdown()` 内部有 DOMPurify | ✅ 已确认 | `renderMarkdown()` 使用 `DOMPurify.sanitize()` 清理 HTML |
 | 5 | 缺少 timeout 测试 | ✅ 已修复 | 新增 3 个测试：failed 状态轮询停止、timeout 状态轮询停止、maxRetries 超时 |
-
----
-
-## 复审新增问题（裁判君 2026-06-14 复审）
-
-| # | 问题 | 级别 | 状态 | 说明 |
-|---|------|------|------|------|
-| 1 | docs/test/2026-06-14_test-report.md 严重过时（27文件/194测试 vs 实际30文件/249测试） | 🟡 中等 | 待修复 | 404 补齐测试报告 |
 
 ---
 

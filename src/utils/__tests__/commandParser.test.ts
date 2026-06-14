@@ -93,7 +93,6 @@ describe('isDispatchCommand', () => {
   });
 
   it('returns true even for /dispatching (prefix match only)', () => {
-    // isDispatchCommand is a prefix check; full validation is in parseCommand
     expect(isDispatchCommand('/dispatching 404 test')).toBe(true);
   });
 });

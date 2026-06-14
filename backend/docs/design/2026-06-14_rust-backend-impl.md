@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS permissions (
 
 ### 4.4 中间件认证
 
-1. 从 Authorization: Bearer <token> 提取 token
+1. 从 Authorization: Bearer *** 提取 token
 2. decode JWT，验证签名和过期时间
 3. 提取 Claims，注入 AuthUser { user_id, role } 到请求扩展
 4. AdminUser 提取器额外检查 role == "admin"
