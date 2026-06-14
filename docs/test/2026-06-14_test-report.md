@@ -41,5 +41,4 @@ Duration    6.14s
 | pixelArt.test.ts | 8 | ✅ |
 | spriteLoader.test.ts | 2 | ✅ |
 | CodeBlock.test.tsx | 3 | ✅ |
-| storage.test.ts | 5 | ✅ |
 | uuid.test.ts | 3 | ✅ |
