@@ -127,15 +127,15 @@ export function deriveEmployeeStatus(
 
 /**
  * Fetch active employees from shell hooks status file.
- * Uses the /chat/api proxy (Nginx proxies this to the backend).
+ * Production: reads static file /chat/data/employees-active.json (Nginx serves directly).
+ * Dev: Vite middleware intercepts and reads /tmp/employees-active.json.
+ * Returns empty object if file doesn't exist (not an error).
  */
 export async function fetchActiveEmployees(): Promise<
   Record<string, ActiveEmployeeEntry>
 > {
   try {
-    const res = await fetch(`${API_BASE}/employees/active`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const res = await fetch('/chat/data/employees-active.json');
     if (!res.ok) return {};
     return await res.json();
   } catch {
