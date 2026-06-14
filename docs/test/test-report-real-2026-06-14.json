@@ -1,0 +1,33 @@
+{
+  "test_summary": {
+    "total_tests": 5,
+    "passed_tests": 3,
+    "failed_tests": 2,
+    "bugs_found": 0,
+    "test_date": "2026-06-14T09:43:25.526591",
+    "test_environment": "http://43.249.192.131:7960/chat/",
+    "test_tool": "Playwright + Obscura CDP"
+  },
+  "test_results": [
+    {
+      "test_id": "TC-1.1.1",
+      "test_name": "页面可访问性",
+      "status": "PASS",
+      "details": "HTTP 200，页面正常加载",
+      "bug_info": null,
+      "timestamp": "2026-06-14T09:43:22.404561"
+    },
+    {
+      "test_id": "TC-1.1.2",
+      "test_name": "静态资源加载",
+      "status": "PASS",
+      "details": "所有静态资源加载成功，无 404 错误",
+      "bug_info": null,
+      "timestamp": "2026-06-14T09:43:22.411984"
+    },
+    {
+      "test_id": "TC-1.1.3",
+      "test_name": "初始界面显示",
+      "status": "FAIL",
+      "details": "缺少关键界面元素: 侧边栏",
+      "bug_info": 

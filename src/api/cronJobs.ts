@@ -2,6 +2,8 @@
 export interface ActiveEmployeeEntry {
   task: string;
   startedAt: string;
+  status?: 'working' | 'completed';
+  pid?: number;
 }
 
 /** Raw cronjob data from Hermes API */
@@ -137,5 +139,21 @@ export async function fetchActiveEmployees(): Promise<
     return await res.json();
   } catch {
     return {};
+  }
+}
+
+/**
+ * Check if a process is still alive by pid.
+ * Hits the backend's /api/process/alive endpoint.
+ * Returns false if the endpoint is unavailable or the process is dead.
+ */
+export async function checkProcessAlive(pid: number): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/process/alive?pid=${pid}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.alive === true;
+  } catch {
+    return false;
   }
 }

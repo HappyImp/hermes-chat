@@ -32,7 +32,7 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
-| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（27 文件 / 189 测试全部通过） |
+| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（27 文件 / 197 测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
 
@@ -47,3 +47,4 @@
 | [backlog/2026-06-14_review-backlog.md](backlog/2026-06-14_review-backlog.md) | 2026-06-14 | 首次审查 9 个优化项 |
 | [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
 | [backlog/2026-06-14_46952be-review-backlog.md](backlog/2026-06-14_46952be-review-backlog.md) | 2026-06-14 | SSE+状态修复审查待优化清单（8 项） |
+| [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
