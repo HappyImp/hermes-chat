@@ -5,6 +5,7 @@ import {
   mapJobNameToEmployee,
   deriveEmployeeStatus,
   fetchActiveEmployees,
+  checkProcessAlive,
 } from '@/api/cronJobs';
 import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
 
@@ -83,20 +84,40 @@ function mergeWithDefaults(defaults: Map<string, Employee>, jobs: CronJob[]): Em
 
 /**
  * Overlay active status from shell hooks onto cron-based employees.
- * Active entries override 'standby'/'off' to 'working'.
+ * Respects the active.json status field instead of blindly forcing 'working'.
+ *
+ * Rules:
+ * 1. activeEntry.status === 'completed' → skip, keep original status
+ * 2. activeEntry has pid but process is dead → mark completed
+ * 3. activeEntry.status === 'working' (or no status field, process alive) → set working
  */
 export function mergeWithActive(
   employees: Employee[],
   active: Record<string, ActiveEmployeeEntry>,
+  pidAliveMap: Record<number, boolean> = {},
 ): Employee[] {
   const keys = Object.keys(active);
   if (keys.length === 0) return employees;
-  const activeNames = new Set(keys);
-  return employees.map((emp) =>
-    activeNames.has(emp.name)
-      ? { ...emp, status: 'working' as const, currentTask: active[emp.name].task }
-      : emp,
-  );
+
+  return employees.map((emp) => {
+    const entry = active[emp.name];
+    if (!entry) return emp;
+
+    // Rule 1: already completed → don't override
+    if (entry.status === 'completed') return emp;
+
+    // Rule 2: has pid but process is dead → mark completed
+    if (entry.pid !== undefined && pidAliveMap[entry.pid] === false) {
+      return { ...emp, status: 'completed' as const, currentTask: entry.task };
+    }
+
+    // Rule 3: explicitly working or legacy entry without status → set working
+    if (entry.status === 'working' || entry.status === undefined) {
+      return { ...emp, status: 'working' as const, currentTask: entry.task };
+    }
+
+    return emp;
+  });
 }
 
 export function useEmployeeStatus() {
@@ -129,7 +150,18 @@ export function useEmployeeStatus() {
       }
 
       const merged = mergeWithDefaults(defaults, jobs);
-      setEmployees(mergeWithActive(merged, active));
+
+      // Pre-compute pid alive states for active entries that have pids
+      const pids = Object.values(active)
+        .map((e) => e.pid)
+        .filter((pid): pid is number => pid !== undefined);
+      const aliveResults = pids.length > 0
+        ? await Promise.all(pids.map(checkProcessAlive))
+        : [];
+      const pidAliveMap: Record<number, boolean> = {};
+      pids.forEach((pid, i) => { pidAliveMap[pid] = aliveResults[i]; });
+
+      setEmployees(mergeWithActive(merged, active, pidAliveMap));
     } catch {
       // On error, show all known employees as off
       const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
