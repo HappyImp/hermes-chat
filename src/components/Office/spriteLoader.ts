@@ -21,7 +21,7 @@ export interface OfficeSprites {
   statusOff: HTMLImageElement;
 }
 
-const BASE = '/assets/office';
+const BASE = `${import.meta.env.BASE_URL}assets/office`;
 
 /** Load a single image, returns a promise that resolves with the Image. */
 export function loadImage(src: string): Promise<HTMLImageElement> {
