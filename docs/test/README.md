@@ -22,15 +22,33 @@
 
 ```
 src/
+├── api/__tests__/
+│   └── cronJobs.test.ts
 ├── components/__tests__/
 │   ├── Toast.test.tsx
 │   ├── Welcome.test.tsx
 │   ├── MessageInput.test.tsx
-│   └── MessageBubble.test.tsx
+│   ├── MessageBubble.test.tsx
+│   ├── CodeBlock.test.tsx
+│   ├── ChatArea.test.tsx
+│   ├── Sidebar.test.tsx
+│   ├── ChannelList.test.tsx
+│   ├── SessionList.test.tsx
+│   └── EmployeeStatus.test.tsx
+├── components/Office/__tests__/
+│   ├── PixelOffice.test.tsx
+│   ├── SpeechBubble.test.tsx
+│   ├── sprites.test.ts
+│   ├── spriteLoader.test.ts
+│   ├── officeLayout.test.ts
+│   ├── pixelArt.test.ts
+│   └── pixelArtImage.test.ts
 ├── hooks/__tests__/
 │   ├── useChat.test.ts
 │   ├── useSession.test.ts
-│   └── useToast.test.ts
+│   ├── useToast.test.ts
+│   ├── useEmployeeStatus.test.ts
+│   └── mergeWithActive.test.ts
 ├── store/__tests__/
 │   └── sessionStore.test.ts
 └── utils/__tests__/
