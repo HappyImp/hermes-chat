@@ -4,12 +4,17 @@ import { renderMarkdown, generateId } from '@/utils';
 
 const API_URL = '/chat/v1/chat/completions';
 
+/**
+ * Parse SSE text from a buffer. Handles \n and \r\n line endings.
+ * Returns [leftover, accumulatedContent].
+ */
 function parseSSEChunk(buffer: string, full: string): [string, string] {
-  const lines = buffer.split('\n');
-  const leftover = lines.pop() || '';
+  const lines = buffer.split(/\r?\n/);
+  const leftover = lines.pop() ?? '';
   for (const line of lines) {
-    if (!line.startsWith('data: ')) continue;
-    const data = line.slice(6).trim();
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const data = trimmed.slice(5).trim();
     if (data === '[DONE]') continue;
     try {
       const parsed = JSON.parse(data);
@@ -35,7 +40,7 @@ export function useChat() {
 
       try {
         const session = useSessionStore.getState().getCurrentSession();
-        const messages = session?.messages.filter((m) => m.content) || [];
+        const messages = session?.messages.filter((m) => m.content) ?? [];
 
         const resp = await fetch(API_URL, {
           method: 'POST',
@@ -51,10 +56,11 @@ export function useChat() {
 
         let full = '';
 
-        if (resp.body?.getReader) {
+        if (resp.body) {
           const reader = resp.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
+
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -62,15 +68,22 @@ export function useChat() {
             [buffer, full] = parseSSEChunk(buffer, full);
             if (full) updateLastMessage(full);
           }
+
+          // Flush decoder and process any remaining buffered data
+          buffer += decoder.decode();
+          if (buffer.trim()) {
+            [, full] = parseSSEChunk(buffer + '\n', full);
+          }
         } else {
+          // Fallback for environments without streaming support
           const text = await resp.text();
           [, full] = parseSSEChunk(text + '\n', '');
         }
 
-        if (!full) {
-          updateLastMessage('（无响应）');
-        } else {
+        if (full) {
           updateLastMessage(full);
+        } else {
+          updateLastMessage('（无响应）');
         }
       } catch (e) {
         const error = e instanceof Error ? e.message : '未知错误';

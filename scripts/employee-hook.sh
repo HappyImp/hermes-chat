@@ -6,6 +6,7 @@
 set -euo pipefail
 
 ACTIVE_FILE="/tmp/employees-active.json"
+PROD_ACTIVE_FILE="/var/www/chat/data/employees-active.json"
 LOCK_FILE="/tmp/employees-active.lock"
 EMPLOYEES=("老财" "铁壳" "小K" "404" "裁判君")
 
@@ -32,6 +33,11 @@ ensure_file() {
   if [[ ! -f "$ACTIVE_FILE" ]] || ! python3 -c "import json; json.load(open('$ACTIVE_FILE'))" 2>/dev/null; then
     echo '{}' > "$ACTIVE_FILE"
   fi
+}
+
+sync_to_prod() {
+  mkdir -p "$(dirname "$PROD_ACTIVE_FILE")" 2>/dev/null || true
+  cp "$ACTIVE_FILE" "$PROD_ACTIVE_FILE" 2>/dev/null || true
 }
 
 on_session_start() {
@@ -68,6 +74,7 @@ with open('$ACTIVE_FILE', 'w') as f:
     json.dump(data, f, ensure_ascii=False)
 " "$task"
   ) 200>"$LOCK_FILE"
+  sync_to_prod
 }
 
 on_session_end() {
@@ -86,6 +93,7 @@ with open('$ACTIVE_FILE', 'w') as f:
     json.dump(data, f, ensure_ascii=False)
 "
   ) 200>"$LOCK_FILE"
+  sync_to_prod
 }
 
 case "${1:-}" in

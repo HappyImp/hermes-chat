@@ -61,6 +61,7 @@ export function mapJobNameToEmployee(jobName: string): string | null {
  * Rules:
  * - Any job with last_run_at within 5 minutes → 'working'
  * - Any job with next_run_at within 30 minutes → 'standby'
+ * - Any enabled job scheduled → 'standby' (waiting for next run)
  * - Otherwise → 'off'
  */
 export function deriveEmployeeStatus(
@@ -80,7 +81,7 @@ export function deriveEmployeeStatus(
     }
   }
 
-  // Check if any job is about to run (standby)
+  // Check if any job is about to run (standby, high priority)
   let soonestJob: CronJob | null = null;
   let soonestTime = Infinity;
 
@@ -99,9 +100,9 @@ export function deriveEmployeeStatus(
     return { status: 'standby', currentTask: soonestJob.name };
   }
 
-  // Find the next upcoming job for display
+  // Any enabled job with a future schedule → standby (employee is on duty)
   for (const job of jobs) {
-    if (job.next_run_at && job.enabled) {
+    if (job.enabled && job.next_run_at) {
       const nextRun = new Date(job.next_run_at).getTime();
       if (nextRun < soonestTime) {
         soonestTime = nextRun;
@@ -110,22 +111,36 @@ export function deriveEmployeeStatus(
     }
   }
 
-  const currentTask = soonestJob ? `下次: ${soonestJob.name}` : '休息中';
-  return { status: 'off', currentTask };
+  if (soonestJob) {
+    const nextDate = new Date(soonestTime);
+    const timeStr = nextDate.toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return { status: 'standby', currentTask: `下次: ${timeStr}` };
+  }
+
+  return { status: 'off', currentTask: '休息中' };
 }
 
 /**
  * Fetch active employees from shell hooks status file.
- * Returns empty object on failure.
+ * Tries static file first (works in production via Nginx try_files),
+ * falls back to Vite dev middleware endpoint.
  */
 export async function fetchActiveEmployees(): Promise<
   Record<string, ActiveEmployeeEntry>
 > {
-  try {
-    const res = await fetch(`${API_BASE}/employees/active`);
-    if (!res.ok) return {};
-    return await res.json();
-  } catch {
-    return {};
+  const urls = ['/chat/data/employees-active.json', `${API_BASE}/employees/active`];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return await res.json();
+    } catch {
+      // try next URL
+    }
   }
+  return {};
 }

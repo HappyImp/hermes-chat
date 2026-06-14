@@ -44,14 +44,21 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
     },
     server: {
-      // Proxy /chat/api/* → Hermes API Server (http://127.0.0.1:8642)
-      // Strip the /chat prefix so /chat/api/foo → /api/foo
-      // All requests are authenticated via the VITE_HERMES_API_KEY env var
+      // Proxy /chat/api/* → Hermes API Server /api/*
+      // Proxy /chat/v1/*  → Hermes API Server /v1/*  (chat completions)
       proxy: {
         '/chat/api': {
           target: 'http://127.0.0.1:8642',
           changeOrigin: true,
           rewrite: (p: string) => p.replace(/^\/chat\/api/, '/api'),
+          headers: {
+            Authorization: `Bearer ${hermesApiKey}`,
+          },
+        },
+        '/chat/v1': {
+          target: 'http://127.0.0.1:8642',
+          changeOrigin: true,
+          rewrite: (p: string) => p.replace(/^\/chat\/v1/, '/v1'),
           headers: {
             Authorization: `Bearer ${hermesApiKey}`,
           },

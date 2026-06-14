@@ -75,7 +75,7 @@ describe('deriveEmployeeStatus', () => {
     expect(result.currentTask).toBe('老财-开盘异动');
   });
 
-  it('returns off when no jobs are recent or upcoming', () => {
+  it('returns standby with next run time when job is enabled but far in future', () => {
     const now = new Date('2026-06-14T10:00:00+08:00');
     const jobs = [
       makeJob({
@@ -86,8 +86,8 @@ describe('deriveEmployeeStatus', () => {
     ];
 
     const result = deriveEmployeeStatus(jobs, now);
-    expect(result.status).toBe('off');
-    expect(result.currentTask).toContain('老财-盘前研判');
+    expect(result.status).toBe('standby');
+    expect(result.currentTask).toContain('6/15');
   });
 
   it('picks the soonest standby job when multiple exist', () => {

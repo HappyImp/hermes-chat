@@ -81,9 +81,7 @@ export function useEmployeeStatus() {
         fetchCronJobs(),
         fetchActiveEmployees(),
       ]);
-      const merged = jobs.length > 0
-        ? mergeWithDefaults(typedEmployees, jobs)
-        : typedEmployees;
+      const merged = mergeWithDefaults(typedEmployees, jobs);
       setEmployees(mergeWithActive(merged, active));
     } catch {
       // On error, keep current state as fallback
