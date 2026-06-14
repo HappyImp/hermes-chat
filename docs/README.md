@@ -12,6 +12,7 @@
 | [prd/2026-06-14_employee-status.md](prd/2026-06-14_employee-status.md) | 2026-06-14 | 员工状态面板功能 PRD |
 | [prd/2026-06-14_shell-hooks.md](prd/2026-06-14_shell-hooks.md) | 2026-06-14 | Shell Hooks 自动追踪 PRD |
 | [prd/2026-06-14_pixel-office.md](prd/2026-06-14_pixel-office.md) | 2026-06-14 | 像素风办公室 PRD |
+| [prd/2026-06-14_employee-async-task.md](prd/2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
 
 ## 🏗️ 设计拆解 (docs/design/)
 
@@ -20,6 +21,7 @@
 | [design/README.md](design/README.md) | 2026-06-14 | 初版设计拆解（组件树 + 状态 + 数据流） |
 | [design/2026-06-14_employee-status-design.md](design/2026-06-14_employee-status-design.md) | 2026-06-14 | 员工状态面板设计 |
 | [design/2026-06-14_pixel-office-design.md](design/2026-06-14_pixel-office-design.md) | 2026-06-14 | 像素风办公室设计 |
+| [design/2026-06-14_employee-async-task-design.md](design/2026-06-14_employee-async-task-design.md) | 2026-06-14 | F6 员工异步任务设计 |
 
 ## 🧠 架构文档 (docs/architecture/)
 
@@ -32,13 +34,13 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
-| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（27 文件 / 189 测试全部通过） |
+| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（30 文件 / 246 测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
 
 | 文档 | 日期 | 说明 |
 |------|------|------|
-| [components/README.md](components/README.md) | 2026-06-14 | 组件清单（含 EmployeeStatus + PixelOffice） |
+| [components/README.md](components/README.md) | 2026-06-14 | 组件清单（含 TaskCard + PixelOffice） |
 
 ## 📌 待优化清单 (docs/backlog/)
 
@@ -47,3 +49,4 @@
 | [backlog/2026-06-14_review-backlog.md](backlog/2026-06-14_review-backlog.md) | 2026-06-14 | 首次审查 9 个优化项 |
 | [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
 | [backlog/2026-06-14_46952be-review-backlog.md](backlog/2026-06-14_46952be-review-backlog.md) | 2026-06-14 | SSE+状态修复审查待优化清单（8 项） |
+| [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
