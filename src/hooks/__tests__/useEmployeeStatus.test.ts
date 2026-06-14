@@ -7,6 +7,7 @@ vi.mock('@/api/cronJobs', () => ({
   fetchCronJobs: vi.fn(),
   mapJobNameToEmployee: vi.fn(),
   deriveEmployeeStatus: vi.fn(),
+  fetchActiveEmployees: vi.fn().mockResolvedValue({}),
 }));
 
 const mockFetchCronJobs = vi.mocked(cronJobsApi.fetchCronJobs);

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Employee } from '@/types/employee';
-import { fetchCronJobs, mapJobNameToEmployee, deriveEmployeeStatus } from '@/api/cronJobs';
-import type { CronJob } from '@/api/cronJobs';
+import {
+  fetchCronJobs,
+  mapJobNameToEmployee,
+  deriveEmployeeStatus,
+  fetchActiveEmployees,
+} from '@/api/cronJobs';
+import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
 import employeesData from '@/data/employees.json';
 
-/**
- * Runtime validation for employee data from JSON.
- * Ensures the data structure matches Employee type.
- */
 function validateEmployee(data: unknown): data is Employee {
   if (!data || typeof data !== 'object') return false;
   const emp = data as Record<string, unknown>;
@@ -27,10 +28,6 @@ const typedEmployees: Employee[] = (employeesData.employees as unknown[])
   .filter(validateEmployee)
   .map((emp) => emp as Employee);
 
-/**
- * Group cron jobs by employee name using mapJobNameToEmployee.
- * Returns a Map of employeeName → CronJob[].
- */
 function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
   const grouped = new Map<string, CronJob[]>();
   for (const job of jobs) {
@@ -43,24 +40,35 @@ function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
   return grouped;
 }
 
-/**
- * Merge API cron data with default employee data.
- * For each default employee:
- * - If they have matching cron jobs → derive status from jobs
- * - If no matching jobs → default to 'off' with '休息中'
- */
 function mergeWithDefaults(defaults: Employee[], jobs: CronJob[]): Employee[] {
   const grouped = groupJobsByEmployee(jobs);
 
   return defaults.map((emp) => {
     const empJobs = grouped.get(emp.name);
     if (!empJobs || empJobs.length === 0) {
-      // No cron jobs for this employee (e.g. 裁判君)
       return { ...emp, status: 'off' as const, currentTask: '休息中' };
     }
     const { status, currentTask } = deriveEmployeeStatus(empJobs);
     return { ...emp, status, currentTask };
   });
+}
+
+/**
+ * Overlay active status from shell hooks onto cron-based employees.
+ * Active entries override 'standby'/'off' to 'working'.
+ */
+export function mergeWithActive(
+  employees: Employee[],
+  active: Record<string, ActiveEmployeeEntry>,
+): Employee[] {
+  const keys = Object.keys(active);
+  if (keys.length === 0) return employees;
+  const activeNames = new Set(keys);
+  return employees.map((emp) =>
+    activeNames.has(emp.name)
+      ? { ...emp, status: 'working' as const, currentTask: active[emp.name].task }
+      : emp,
+  );
 }
 
 export function useEmployeeStatus() {
@@ -69,23 +77,24 @@ export function useEmployeeStatus() {
 
   const refresh = useCallback(async () => {
     try {
-      const jobs = await fetchCronJobs();
-      if (jobs.length > 0) {
-        setEmployees(mergeWithDefaults(typedEmployees, jobs));
-      }
-      // If API returns empty, keep current state (fallback to defaults)
+      const [jobs, active] = await Promise.all([
+        fetchCronJobs(),
+        fetchActiveEmployees(),
+      ]);
+      const merged = jobs.length > 0
+        ? mergeWithDefaults(typedEmployees, jobs)
+        : typedEmployees;
+      setEmployees(mergeWithActive(merged, active));
     } catch {
       // On error, keep current state as fallback
     }
     setLastUpdated(new Date());
   }, []);
 
-  // Fetch on mount
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Auto-refresh every 60 seconds
   useEffect(() => {
     const timer = setInterval(refresh, 60_000);
     return () => clearInterval(timer);

@@ -1,3 +1,9 @@
+/** Active employee entry from shell hooks file. */
+export interface ActiveEmployeeEntry {
+  task: string;
+  startedAt: string;
+}
+
 /** Raw cronjob data from Hermes API */
 export interface CronJob {
   id: string;
@@ -106,4 +112,20 @@ export function deriveEmployeeStatus(
 
   const currentTask = soonestJob ? `下次: ${soonestJob.name}` : '休息中';
   return { status: 'off', currentTask };
+}
+
+/**
+ * Fetch active employees from shell hooks status file.
+ * Returns empty object on failure.
+ */
+export async function fetchActiveEmployees(): Promise<
+  Record<string, ActiveEmployeeEntry>
+> {
+  try {
+    const res = await fetch(`${API_BASE}/employees/active`);
+    if (!res.ok) return {};
+    return await res.json();
+  } catch {
+    return {};
+  }
 }

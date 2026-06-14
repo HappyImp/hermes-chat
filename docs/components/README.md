@@ -97,6 +97,30 @@ Channel 管理组件。
 
 - `src/data/employees.json` — 初始员工状态数据
 - `src/hooks/useEmployeeStatus.ts` — 状态管理 Hook
+- Hermes CronJob API (`/api/jobs`) — 定时任务状态
+- Shell Hooks 状态文件 (`/tmp/employees-active.json`) — 临时任务活跃状态
+
+### Shell Hooks 自动追踪
+
+员工通过 `hermes -z` 执行的临时任务不在 cronjob 列表中，面板无法感知。
+Shell Hooks 机制在 session start/end 时自动写入/移除活跃状态文件。
+
+**工作流程：**
+
+1. Hermes 在 session 启动时调用 `scripts/employee-hook.sh on_session_start`
+2. 脚本从 `HERMES_SESSION_PROMPT` 前 6 字节识别员工名（老财/铁壳/小K/404/裁判君）
+3. 写入 `/tmp/employees-active.json`，格式：`{"员工名": {"task": "...", "startedAt": "..."}}`
+4. session 结束时调用 `on_session_end` 移除对应条目
+5. `useEmployeeStatus` hook 并行 fetch cronjob API + active 文件，合并结果
+
+**合并规则：**
+
+- cronjob 显示 working → 保持 working
+- cronjob 显示 standby/off 但 active 文件有该员工 → 升级为 working + 文件中的 task
+
+**并发安全：** `flock` 文件锁避免多 session 同时写入竞态。
+
+**开发环境：** Vite dev server 通过 middleware 直接读取 `/tmp/employees-active.json`。
 
 ---
 
