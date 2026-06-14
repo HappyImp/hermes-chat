@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { TaskCard } from '../Chat/TaskCard';
-import type { TaskInfo } from '@/hooks/useEmployeeTask';
+import type { TaskInfo } from '@/types';
 
 function makeTaskInfo(overrides: Partial<TaskInfo> = {}): TaskInfo {
   return {

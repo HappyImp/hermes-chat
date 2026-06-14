@@ -50,3 +50,4 @@
 | [backlog/2026-06-14_employee-status-review.md](backlog/2026-06-14_employee-status-review.md) | 2026-06-14 | 员工状态面板审查待优化清单 |
 | [backlog/2026-06-14_46952be-review-backlog.md](backlog/2026-06-14_46952be-review-backlog.md) | 2026-06-14 | SSE+状态修复审查待优化清单（8 项） |
 | [backlog/2026-06-14_35f6fe4-review-backlog.md](backlog/2026-06-14_35f6fe4-review-backlog.md) | 2026-06-14 | 员工状态动态列表审查（2🔴+2🟡） |
+| [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |

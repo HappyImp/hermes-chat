@@ -1,9 +1,12 @@
-/** 任务信息（用于消息元数据） */
+/** 任务状态类型（全局共用） */
+export type TaskStatus = 'pending' | 'working' | 'completed' | 'failed' | 'timeout';
+
+/** 任务信息（用于消息元数据和任务调度） */
 export interface TaskInfo {
   id: string;
   employee: string;
   task: string;
-  status: 'pending' | 'working' | 'completed' | 'failed' | 'timeout';
+  status: TaskStatus;
   startedAt: Date;
   result?: string;
   error?: string;

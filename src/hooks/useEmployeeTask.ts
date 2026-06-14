@@ -1,20 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { generateId } from '@/utils';
 import { fetchActiveEmployees } from '@/api/cronJobs';
-
-/** 任务状态类型 */
-export type TaskStatus = 'pending' | 'working' | 'completed' | 'failed' | 'timeout';
-
-/** 任务信息 */
-export interface TaskInfo {
-  id: string;
-  employee: string;
-  task: string;
-  status: TaskStatus;
-  startedAt: Date;
-  result?: string;
-  error?: string;
-}
+import type { TaskInfo } from '@/types';
 
 /** API 响应类型 */
 interface DispatchResponse {
@@ -39,18 +26,37 @@ const API_BASE = '/chat/api';
  * - 启动员工异步任务
  * - 轮询任务状态
  * - 管理活跃任务列表
+ *
+ * @example
+ * const { dispatchTask, activeTasks } = useEmployeeTask();
+ *
+ * // 启动任务
+ * const taskInfo = await dispatchTask('404', '修复登录bug');
+ *
+ * // 查看状态
+ * console.log(activeTasks.get(taskInfo.id));
  */
 export function useEmployeeTask() {
   const [activeTasks, setActiveTasks] = useState<Map<string, TaskInfo>>(new Map());
   const pollingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  /**
+   * 启动员工任务
+   *
+   * @param employee - 员工名称
+   * @param task - 任务描述
+   * @returns 任务信息
+   * @throws 网络错误或员工忙
+   */
   const dispatchTask = useCallback(
     async (employee: string, task: string): Promise<TaskInfo> => {
+      // 检查员工是否在执行任务
       const active = await fetchActiveEmployees();
       if (active[employee]?.status === 'working') {
         throw new Error(`员工 ${employee} 正在执行其他任务，请稍后再试`);
       }
 
+      // 调用 API 启动任务
       const response = await fetch(`${API_BASE}/tasks/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,6 +70,7 @@ export function useEmployeeTask() {
 
       const data: DispatchResponse = await response.json();
 
+      // 创建任务信息
       const taskInfo: TaskInfo = {
         id: data.task_id || generateId(),
         employee,
@@ -72,6 +79,7 @@ export function useEmployeeTask() {
         startedAt: new Date(data.started_at || Date.now()),
       };
 
+      // 添加到活跃任务列表
       setActiveTasks((prev) => new Map(prev).set(taskInfo.id, taskInfo));
 
       return taskInfo;
@@ -79,6 +87,9 @@ export function useEmployeeTask() {
     [],
   );
 
+  /**
+   * 更新任务状态
+   */
   const updateTaskStatus = useCallback((taskId: string, updates: Partial<TaskInfo>) => {
     setActiveTasks((prev) => {
       const updated = new Map(prev);
@@ -90,6 +101,20 @@ export function useEmployeeTask() {
     });
   }, []);
 
+  /**
+   * 停止指定任务的轮询
+   */
+  const stopPolling = useCallback((taskId: string) => {
+    const timer = pollingTimers.current.get(taskId);
+    if (timer) {
+      clearTimeout(timer);
+      pollingTimers.current.delete(taskId);
+    }
+  }, []);
+
+  /**
+   * 轮询任务状态
+   */
   useEffect(() => {
     if (activeTasks.size === 0) return;
 
@@ -98,32 +123,26 @@ export function useEmployeeTask() {
         const active = await fetchActiveEmployees();
         const entry = active[taskInfo.employee];
 
+        // 任务已结束的状态：completed / failed / timeout
         if (entry?.status === 'completed') {
           updateTaskStatus(taskId, {
             status: 'completed',
             result: entry.task,
           });
-          const timer = pollingTimers.current.get(taskId);
-          if (timer) {
-            clearTimeout(timer);
-            pollingTimers.current.delete(taskId);
-          }
-        } else if (entry?.status === 'failed') {
+          stopPolling(taskId);
+        } else if (entry?.status === 'failed' || entry?.status === 'timeout') {
           updateTaskStatus(taskId, {
-            status: 'failed',
+            status: entry.status,
             error: entry.task,
           });
-          const timer = pollingTimers.current.get(taskId);
-          if (timer) {
-            clearTimeout(timer);
-            pollingTimers.current.delete(taskId);
-          }
+          stopPolling(taskId);
         }
       } catch (error) {
         console.error('轮询任务状态失败:', error);
       }
     };
 
+    // 为每个活跃任务启动轮询
     for (const [taskId, taskInfo] of activeTasks) {
       if (taskInfo.status !== 'working') continue;
       if (pollingTimers.current.has(taskId)) continue;
@@ -148,6 +167,7 @@ export function useEmployeeTask() {
       startPolling();
     }
 
+    // 清理：停止不再活跃的任务的轮询
     for (const [taskId, timer] of pollingTimers.current) {
       if (!activeTasks.has(taskId)) {
         clearTimeout(timer);
@@ -156,6 +176,7 @@ export function useEmployeeTask() {
     }
   }, [activeTasks, updateTaskStatus]);
 
+  // 清理所有轮询
   useEffect(() => {
     return () => {
       for (const timer of pollingTimers.current.values()) {
@@ -165,6 +186,9 @@ export function useEmployeeTask() {
     };
   }, []);
 
+  /**
+   * 获取任务状态
+   */
   const getTaskStatus = useCallback(
     (taskId: string): TaskInfo | null => {
       return activeTasks.get(taskId) ?? null;
@@ -172,6 +196,9 @@ export function useEmployeeTask() {
     [activeTasks],
   );
 
+  /**
+   * 移除已完成的任务
+   */
   const removeTask = useCallback((taskId: string) => {
     setActiveTasks((prev) => {
       const updated = new Map(prev);

@@ -1,63 +1,103 @@
-import type { TaskInfo } from '@/hooks/useEmployeeTask';
+import type { TaskInfo } from '@/types';
 
-const employeeMap: Record<string, { avatar: string; role: string }> = {
-  '老财': { avatar: '💰', role: 'AI操盘手' },
-  '铁壳': { avatar: '🤖', role: '运维工程师' },
-  '小K': { avatar: '🔍', role: '科技资讯官' },
-  '404': { avatar: '💻', role: 'AI开发工程师' },
-  '裁判君': { avatar: '⚖️', role: '代码审查员' },
-  'Ditto': { avatar: '🧪', role: '测试工程师' },
+/** 状态图标映射 */
+const STATUS_ICON: Record<TaskInfo['status'], string> = {
+  pending: '⏳',
+  working: '🔄',
+  completed: '✅',
+  failed: '❌',
+  timeout: '⏰',
 };
 
-const statusConfig = {
-  pending: { icon: '⏳', text: '等待中', className: 'text-text2' },
-  working: { icon: '🔄', text: '执行中...', className: 'text-primary animate-pulse' },
-  completed: { icon: '✅', text: '已完成', className: 'text-success' },
-  failed: { icon: '❌', text: '失败', className: 'text-danger' },
-  timeout: { icon: '⏰', text: '超时', className: 'text-warning' },
+/** 状态文本映射 */
+const STATUS_TEXT: Record<TaskInfo['status'], string> = {
+  pending: '等待中',
+  working: '执行中...',
+  completed: '已完成',
+  failed: '失败',
+  timeout: '超时',
+};
+
+/** 员工角色映射 */
+const EMPLOYEE_ROLE: Record<string, string> = {
+  '老财': 'AI操盘手',
+  '铁壳': 'AI运维工程师',
+  '小K': 'AI情报员',
+  '404': 'AI开发工程师',
+  '裁判君': 'AI审查官',
+  'Ditto': 'AI测试工程师',
+};
+
+/** 员工头像映射 */
+const EMPLOYEE_AVATAR: Record<string, string> = {
+  '老财': '💰',
+  '铁壳': '🤖',
+  '小K': '🔍',
+  '404': '💻',
+  '裁判君': '⚖️',
+  'Ditto': '🧪',
 };
 
 interface TaskCardProps {
   taskInfo: TaskInfo;
 }
 
+/**
+ * 员工任务卡片组件
+ *
+ * 显示员工异步任务的状态、进度和结果
+ *
+ * @example
+ * <TaskCard taskInfo={taskInfo} />
+ */
 export function TaskCard({ taskInfo }: TaskCardProps) {
   const { employee, task, status, startedAt, result, error } = taskInfo;
-  const emp = employeeMap[employee] || { avatar: '👤', role: 'AI员工' };
-  const st = statusConfig[status];
+
+  const statusIcon = STATUS_ICON[status];
+  const statusText = STATUS_TEXT[status];
+  const role = EMPLOYEE_ROLE[employee] || 'AI员工';
+  const avatar = EMPLOYEE_AVATAR[employee] || '👤';
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-3.5 min-w-[280px] max-w-[400px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">{emp.avatar}</span>
-        <div className="flex-1">
-          <span className="font-semibold text-sm">{employee}</span>
-          <span className="text-xs text-text2 ml-2">{emp.role}</span>
+    <div className="task-card" data-testid="task-card">
+      {/* 头部：员工信息 */}
+      <div className="task-card-header">
+        <span className="task-avatar">{avatar}</span>
+        <div className="task-employee-info">
+          <span className="task-employee-name">{employee}</span>
+          <span className="task-employee-role">{role}</span>
         </div>
-        <span className={`text-xs ${st.className}`}>{st.icon} {st.text}</span>
+        <span className="task-status-icon">{statusIcon}</span>
       </div>
 
-      {/* Task description */}
-      <div className="text-sm text-text mb-2">{task}</div>
+      {/* 任务描述 */}
+      <div className="task-card-body">
+        <p className="task-description">{task}</p>
+        <p className="task-status" data-testid="task-status">
+          {statusText}
+        </p>
+      </div>
 
-      {/* Result */}
+      {/* 结果或错误 */}
       {result && (
-        <div className="text-xs text-success bg-success/10 rounded-lg p-2 mt-2" data-testid="task-result">
-          {result}
+        <div className="task-card-result" data-testid="task-result">
+          <span className="result-label">结果:</span>
+          <span className="result-content">{result}</span>
         </div>
       )}
 
-      {/* Error */}
       {error && (
-        <div className="text-xs text-danger bg-danger/10 rounded-lg p-2 mt-2" data-testid="task-error">
-          <span className="font-semibold">错误:</span> {error}
+        <div className="task-card-error" data-testid="task-error">
+          <span className="error-label">错误:</span>
+          <span className="error-content">{error}</span>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="text-xs text-text2 mt-2">
-        启动时间: {startedAt.toLocaleString('zh-CN')}
+      {/* 底部：时间信息 */}
+      <div className="task-card-footer">
+        <span className="task-time">
+          启动时间: {startedAt.toLocaleString('zh-CN')}
+        </span>
       </div>
     </div>
   );
