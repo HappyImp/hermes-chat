@@ -1,6 +1,7 @@
-pub mod auth;
-pub mod employee;
-pub mod session;
-pub mod chat;
-pub mod hermes;
 pub mod admin;
+pub mod auth;
+pub mod chat;
+pub mod employee;
+pub mod hermes;
+pub mod kanban;
+pub mod session;

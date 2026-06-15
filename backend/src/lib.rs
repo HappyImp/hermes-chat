@@ -11,6 +11,7 @@ use db::DbPool;
 use services::auth::AuthService;
 use services::employee::EmployeeService;
 use services::hermes::HermesClient;
+use services::kanban::KanbanService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,5 +19,6 @@ pub struct AppState {
     pub auth_service: AuthService,
     pub employee_service: EmployeeService,
     pub hermes_client: HermesClient,
+    pub kanban_service: KanbanService,
     pub jwt_secret: String,
 }

@@ -66,7 +66,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_token_blacklist_user_id ON token_blacklist(user_id);
         CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires_at ON token_blacklist(expires_at);
-        "
+        ",
     )
     .execute(pool)
     .await?;
@@ -92,7 +92,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_invitation_codes_code ON invitation_codes(code);
         CREATE INDEX IF NOT EXISTS idx_invitation_codes_status ON invitation_codes(status);
-        "
+        ",
     )
     .execute(pool)
     .await?;
@@ -113,7 +113,36 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_audit_logs_operator ON audit_logs(operator_id);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+        ",
+    )
+    .execute(pool)
+    .await?;
+
+    // tenant 映射表（KAN-105）
+    sqlx::query(
         "
+        CREATE TABLE IF NOT EXISTS user_tenants (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            tenant_id TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, tenant_id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_tenants_user_id ON user_tenants(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_tenants_tenant_id ON user_tenants(tenant_id);
+        ",
+    )
+    .execute(pool)
+    .await?;
+
+    // 迁移现有权限数据到 user_tenants
+    sqlx::query(
+        "INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id)
+         SELECT lower(hex(randomblob(16))), user_id, 'default'
+         FROM permissions WHERE allowed = 1
+         GROUP BY user_id",
     )
     .execute(pool)
     .await?;
