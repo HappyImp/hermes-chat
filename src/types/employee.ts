@@ -11,6 +11,14 @@ export interface Employee {
   currentTaskId?: string;
   /** 该员工负责的 kanban 任务总数 */
   taskCount?: number;
+  /** kanban 任务总数（实时统计） */
+  kanbanTaskCount?: number;
+  /** kanban running 任务数 */
+  kanbanRunningCount?: number;
+  /** kanban pending 任务数 */
+  kanbanPendingCount?: number;
+  /** kanban completed 任务数 */
+  kanbanCompletedCount?: number;
 }
 
 export interface EmployeeStatusData {
@@ -21,11 +29,17 @@ export interface EmployeeStatusData {
 export interface KanbanTask {
   id: string;
   title: string;
+  body?: string;
   status: string;
   assignee: string;
-  priority: string;
-  createdAt: string;
-  updatedAt: string;
+  priority: number | string;
+  created_at?: number;
+  started_at?: number;
+  completed_at?: number | null;
+  /** @deprecated use created_at */
+  createdAt?: string;
+  /** @deprecated use started_at */
+  updatedAt?: string;
 }
 
 /** Kanban 看板统计 */

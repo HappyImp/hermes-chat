@@ -1,13 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Employee, KanbanTask } from '@/types/employee';
-import { kanbanStatusToEmployeeStatus } from '@/types/employee';
-import {
-  fetchKanbanEmployees,
-  fetchKanbanTasks,
-  KanbanWebSocket,
-  buildKanbanWsUrl,
-} from '@/api/kanban';
-import type { KanbanEvent } from '@/api/kanban';
+import { useState, useEffect, useCallback } from 'react';
+import type { Employee } from '@/types/employee';
 import {
   fetchCronJobs,
   mapJobNameToEmployee,
@@ -16,19 +8,21 @@ import {
   checkProcessAlive,
 } from '@/api/cronJobs';
 import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
+import {
+  fetchKanbanTasks,
+  groupKanbanTasksByEmployee,
+  deriveKanbanTaskStatus,
+} from '@/api/kanban';
+import type { KanbanTask } from '@/types/employee';
 
 /** Default employee metadata (role, avatar, tasks) for known employees */
 const EMPLOYEE_META: Record<string, { role: string; avatar: string; tasks: string[] }> = {
-  老财: {
-    role: 'AI操盘手',
-    avatar: '💰',
-    tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'],
-  },
-  铁壳: { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
-  小K: { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
+  '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'] },
+  '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
+  '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
   '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['每日日报', '开发任务'] },
-  裁判君: { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
-  Ditto: { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
+  '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
+  'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
 };
 
 /** Create a default employee object for a given name */
@@ -44,7 +38,6 @@ function createDefaultEmployee(name: string): Employee {
       tasks: meta.tasks,
     };
   }
-  // Unknown employee: use generic metadata
   return {
     name,
     role: 'AI员工',
@@ -75,6 +68,12 @@ function extractEmployeesFromJobs(jobs: CronJob[]): string[] {
     if (name) names.add(name);
   }
   return Array.from(names);
+}
+
+/** Extract unique employee names from kanban tasks */
+function extractEmployeesFromKanban(tasks: KanbanTask[]): string[] {
+  const grouped = groupKanbanTasksByEmployee(tasks);
+  return Array.from(grouped.keys());
 }
 
 function mergeWithDefaults(defaults: Map<string, Employee>, jobs: CronJob[]): Employee[] {
@@ -132,83 +131,72 @@ export function mergeWithActive(
   });
 }
 
-// ─── Kanban 模式 ────────────────────────────────────────────────────
+/**
+ * Overlay kanban task data onto employees.
+ *
+ * Rules (lower priority than active entries, higher than cron-only):
+ * 1. Has doing kanban task → set 'working' + task title
+ * 2. Has todo kanban tasks → set 'standby' (if currently off)
+ * 3. Always populate kanban count fields
+ *
+ * @param employees - employees with cron-based status already merged
+ * @param kanbanTasksByEmployee - kanban tasks grouped by employee name
+ */
+export function mergeWithKanban(
+  employees: Employee[],
+  kanbanTasksByEmployee: Map<string, KanbanTask[]>,
+): Employee[] {
+  if (kanbanTasksByEmployee.size === 0) return employees;
 
-/** 将 kanban 任务 + 员工信息合并为 Employee[] */
-function mergeKanbanEmployees(kanbanEmployees: Employee[], tasks: KanbanTask[]): Employee[] {
-  // 按 assignee 分组任务
-  const tasksByAssignee = new Map<string, KanbanTask[]>();
-  for (const task of tasks) {
-    const list = tasksByAssignee.get(task.assignee) ?? [];
-    list.push(task);
-    tasksByAssignee.set(task.assignee, list);
-  }
+  return employees.map((emp) => {
+    const kanbanTasks = kanbanTasksByEmployee.get(emp.name);
+    if (!kanbanTasks || kanbanTasks.length === 0) return emp;
 
-  return kanbanEmployees.map((emp) => {
-    const empTasks = tasksByAssignee.get(emp.name) ?? [];
-    // 找到最新的 "doing" 任务作为当前任务
-    const doingTask = empTasks.find((t) => t.status === 'doing');
-    const status = doingTask ? kanbanStatusToEmployeeStatus('doing') : emp.status;
+    const kanbanStatus = deriveKanbanTaskStatus(kanbanTasks);
 
-    return {
-      ...emp,
-      status,
-      currentTask: doingTask?.title ?? emp.currentTask,
-      currentTaskId: doingTask?.id,
-      taskCount: empTasks.length,
-      kanbanStatus: doingTask?.status ?? emp.kanbanStatus,
+    // Build kanban field updates
+    const kanbanFields: Partial<Employee> = {
+      taskCount: kanbanTasks.length,
+      kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : 'done',
     };
+
+    // Only upgrade status, never downgrade working → standby
+    if (kanbanStatus.status === 'working' && emp.status !== 'working') {
+      return {
+        ...emp,
+        ...kanbanFields,
+        status: 'working' as const,
+        currentTask: kanbanStatus.currentTask,
+        currentTaskId: kanbanTasks.find((t) => t.status === 'doing')?.id,
+      };
+    }
+
+    // Set standby if employee is off and kanban has pending work
+    if (kanbanStatus.status === 'standby' && emp.status === 'off') {
+      return {
+        ...emp,
+        ...kanbanFields,
+        status: 'standby' as const,
+        currentTask: kanbanStatus.currentTask,
+      };
+    }
+
+    // Just attach kanban fields without changing status
+    return { ...emp, ...kanbanFields };
   });
 }
-
-// ─── Hook ───────────────────────────────────────────────────────────
-
-const USE_KANBAN = import.meta.env.VITE_USE_KANBAN === 'true';
 
 export function useEmployeeStatus() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const wsRef = useRef<KanbanWebSocket | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Kanban 模式 ──────────────────────────────────────────────────
-
-  const refreshKanban = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const [kanbanEmployees, tasks] = await Promise.all([
-        fetchKanbanEmployees(),
+      const [jobs, active, kanbanTasks] = await Promise.all([
+        fetchCronJobs(),
+        fetchActiveEmployees(),
         fetchKanbanTasks(),
       ]);
-
-      if (kanbanEmployees.length > 0) {
-        setEmployees(mergeKanbanEmployees(kanbanEmployees, tasks));
-      } else {
-        // API 返回空 → 降级为默认员工列表
-        const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
-        setEmployees(fallback);
-      }
-    } catch {
-      const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
-      setEmployees(fallback);
-    }
-    setLastUpdated(new Date());
-  }, []);
-
-  const handleKanbanEvent = useCallback(
-    (event: KanbanEvent) => {
-      // 任务相关事件 → 触发刷新
-      if (event.type.startsWith('task.')) {
-        refreshKanban();
-      }
-    },
-    [refreshKanban],
-  );
-
-  // ── Legacy 模式 ──────────────────────────────────────────────────
-
-  const refreshLegacy = useCallback(async () => {
-    try {
-      const [jobs, active] = await Promise.all([fetchCronJobs(), fetchActiveEmployees()]);
 
       // Always start with all known employees
       const defaults = new Map<string, Employee>();
@@ -216,7 +204,7 @@ export function useEmployeeStatus() {
         defaults.set(name, createDefaultEmployee(name));
       }
 
-      // Add any additional employees from cron jobs or active entries
+      // Add any additional employees from cron jobs, active entries, or kanban
       for (const name of extractEmployeesFromJobs(jobs)) {
         if (!defaults.has(name)) {
           defaults.set(name, createDefaultEmployee(name));
@@ -227,20 +215,32 @@ export function useEmployeeStatus() {
           defaults.set(name, createDefaultEmployee(name));
         }
       }
+      for (const name of extractEmployeesFromKanban(kanbanTasks)) {
+        if (!defaults.has(name)) {
+          defaults.set(name, createDefaultEmployee(name));
+        }
+      }
 
+      // Layer 1: cron job status
       const merged = mergeWithDefaults(defaults, jobs);
 
-      // Pre-compute pid alive states for active entries that have pids
+      // Layer 2: active entries (shell hooks, highest real-time priority)
       const pids = Object.values(active)
         .map((e) => e.pid)
         .filter((pid): pid is number => pid !== undefined);
-      const aliveResults = pids.length > 0 ? await Promise.all(pids.map(checkProcessAlive)) : [];
+      const aliveResults = pids.length > 0
+        ? await Promise.all(pids.map(checkProcessAlive))
+        : [];
       const pidAliveMap: Record<number, boolean> = {};
-      pids.forEach((pid, i) => {
-        pidAliveMap[pid] = aliveResults[i];
-      });
+      pids.forEach((pid, i) => { pidAliveMap[pid] = aliveResults[i]; });
 
-      setEmployees(mergeWithActive(merged, active, pidAliveMap));
+      const withActive = mergeWithActive(merged, active, pidAliveMap);
+
+      // Layer 3: kanban task status (augments counts + upgrades if applicable)
+      const kanbanGrouped = groupKanbanTasksByEmployee(kanbanTasks);
+      const withKanban = mergeWithKanban(withActive, kanbanGrouped);
+
+      setEmployees(withKanban);
     } catch {
       // On error, show all known employees as off
       const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
@@ -249,49 +249,11 @@ export function useEmployeeStatus() {
     setLastUpdated(new Date());
   }, []);
 
-  // ── 主逻辑 ───────────────────────────────────────────────────────
-
-  const refresh = USE_KANBAN ? refreshKanban : refreshLegacy;
-
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Kanban 模式：WebSocket + 降级轮询
   useEffect(() => {
-    if (!USE_KANBAN) return;
-
-    const ws = new KanbanWebSocket(buildKanbanWsUrl());
-    wsRef.current = ws;
-
-    ws.on(handleKanbanEvent);
-    ws.connect();
-
-    // 定时检查 WebSocket 状态，断开时降级为 30s 轮询
-    const checkInterval = setInterval(() => {
-      if (!ws.connected && !pollingRef.current) {
-        // WebSocket 断开 → 启动降级轮询
-        pollingRef.current = setInterval(refreshKanban, 30_000);
-      } else if (ws.connected && pollingRef.current) {
-        // WebSocket 恢复 → 停止降级轮询
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    }, 5_000);
-
-    return () => {
-      ws.disconnect();
-      clearInterval(checkInterval);
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [refreshKanban, handleKanbanEvent]);
-
-  // Legacy 模式：60s 轮询
-  useEffect(() => {
-    if (USE_KANBAN) return;
     const timer = setInterval(refresh, 60_000);
     return () => clearInterval(timer);
   }, [refresh]);

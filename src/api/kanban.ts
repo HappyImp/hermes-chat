@@ -1,6 +1,16 @@
 import type { KanbanTask, KanbanStats, Employee } from '@/types/employee';
+export type { KanbanTask } from '@/types/employee';
 
 const API_BASE = '/chat/api/kanban';
+
+/** Employee's kanban-derived status summary. */
+export interface EmployeeKanbanStatus {
+  status: 'working' | 'standby' | 'off';
+  currentTask: string;
+  pendingCount: number;
+  completedCount: number;
+  runningCount: number;
+}
 
 // ─── REST API ───────────────────────────────────────────────────────
 
@@ -168,11 +178,91 @@ export class KanbanWebSocket {
   }
 }
 
-/**
- * 构造 WebSocket URL。
- * 同源页面使用相对协议，避免混合内容问题。
- */
-export function buildKanbanWsUrl(): string {
+/** Get the WebSocket URL for kanban events. */
+export function getKanbanWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}/chat/api/kanban/events`;
+}
+
+// ─── Status Derivation ─────────────────────────────────────────────
+
+/**
+ * Map a kanban assignee name to an employee display name.
+ * Kanban assignees use Hermes profile names (e.g., "coder-404"),
+ * while employees use display names (e.g., "404").
+ * Returns null if no match.
+ */
+export function mapKanbanAssigneeToEmployee(assignee: string): string | null {
+  if (!assignee) return null;
+
+  const lower = assignee.toLowerCase();
+
+  if (lower.includes('404') || lower === 'coder-404') return '404';
+  if (lower.includes('老财') || lower === 'laocai') return '老财';
+  if (lower.includes('铁壳') || lower === 'tieke') return '铁壳';
+  if (lower.includes('小k') || lower === 'xiaok') return '小K';
+  if (lower.includes('裁判') || lower === 'reviewer' || lower === 'referee') return '裁判君';
+  if (lower.includes('ditto')) return 'Ditto';
+
+  return null;
+}
+
+/**
+ * Derive an employee's status from their kanban tasks.
+ *
+ * Rules (priority order):
+ * 1. Any task with status 'doing' → 'working' (show task title)
+ * 2. Any task with status 'todo' → 'standby' (has pending work)
+ * 3. Only 'done' tasks or no tasks → 'off'
+ */
+export function deriveKanbanTaskStatus(tasks: KanbanTask[]): EmployeeKanbanStatus {
+  const doing = tasks.filter((t) => t.status === 'doing');
+  const todo = tasks.filter((t) => t.status === 'todo');
+  const done = tasks.filter((t) => t.status === 'done');
+
+  if (doing.length > 0) {
+    return {
+      status: 'working',
+      currentTask: doing[0].title,
+      pendingCount: todo.length,
+      completedCount: done.length,
+      runningCount: doing.length,
+    };
+  }
+
+  if (todo.length > 0) {
+    return {
+      status: 'standby',
+      currentTask: `待处理: ${todo.length} 个任务`,
+      pendingCount: todo.length,
+      completedCount: done.length,
+      runningCount: 0,
+    };
+  }
+
+  return {
+    status: 'off',
+    currentTask: done.length > 0 ? `已完成 ${done.length} 项` : '暂无任务',
+    pendingCount: 0,
+    completedCount: done.length,
+    runningCount: 0,
+  };
+}
+
+/**
+ * Group kanban tasks by assignee, returning a map of employee name → tasks.
+ * Only includes tasks whose assignee maps to a known employee.
+ */
+export function groupKanbanTasksByEmployee(
+  tasks: KanbanTask[],
+): Map<string, KanbanTask[]> {
+  const grouped = new Map<string, KanbanTask[]>();
+  for (const task of tasks) {
+    const employee = mapKanbanAssigneeToEmployee(task.assignee);
+    if (!employee) continue;
+    const existing = grouped.get(employee) ?? [];
+    existing.push(task);
+    grouped.set(employee, existing);
+  }
+  return grouped;
 }

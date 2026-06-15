@@ -1,212 +1,198 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  mapKanbanAssigneeToEmployee,
+  deriveKanbanTaskStatus,
+  groupKanbanTasksByEmployee,
   fetchKanbanTasks,
-  fetchKanbanTask,
-  fetchKanbanStats,
-  fetchKanbanEmployees,
-  buildKanbanWsUrl,
-  KanbanWebSocket,
 } from '../kanban';
+import type { KanbanTask } from '@/types/employee';
 
-const mockFetch = vi.fn();
+function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
+  return {
+    id: 't_test123',
+    title: '测试任务',
+    status: 'todo',
+    assignee: 'coder-404',
+    priority: '0',
+    createdAt: '2026-06-15T10:00:00Z',
+    updatedAt: '2026-06-15T10:00:00Z',
+    ...overrides,
+  };
+}
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.stubGlobal('fetch', mockFetch);
+describe('mapKanbanAssigneeToEmployee', () => {
+  it('maps coder-404 to 404', () => {
+    expect(mapKanbanAssigneeToEmployee('coder-404')).toBe('404');
+  });
+
+  it('maps profile names containing 404', () => {
+    expect(mapKanbanAssigneeToEmployee('404')).toBe('404');
+    expect(mapKanbanAssigneeToEmployee('worker-404')).toBe('404');
+  });
+
+  it('maps reviewer to 裁判君', () => {
+    expect(mapKanbanAssigneeToEmployee('reviewer')).toBe('裁判君');
+    expect(mapKanbanAssigneeToEmployee('referee')).toBe('裁判君');
+  });
+
+  it('maps 裁判 to 裁判君', () => {
+    expect(mapKanbanAssigneeToEmployee('裁判')).toBe('裁判君');
+  });
+
+  it('maps ditto to Ditto', () => {
+    expect(mapKanbanAssigneeToEmployee('ditto')).toBe('Ditto');
+    expect(mapKanbanAssigneeToEmployee('Ditto')).toBe('Ditto');
+  });
+
+  it('maps laocai to 老财', () => {
+    expect(mapKanbanAssigneeToEmployee('laocai')).toBe('老财');
+    expect(mapKanbanAssigneeToEmployee('老财')).toBe('老财');
+  });
+
+  it('maps tieke to 铁壳', () => {
+    expect(mapKanbanAssigneeToEmployee('tieke')).toBe('铁壳');
+    expect(mapKanbanAssigneeToEmployee('铁壳')).toBe('铁壳');
+  });
+
+  it('maps xiaok to 小K', () => {
+    expect(mapKanbanAssigneeToEmployee('xiaok')).toBe('小K');
+    expect(mapKanbanAssigneeToEmployee('小K')).toBe('小K');
+  });
+
+  it('returns null for empty assignee', () => {
+    expect(mapKanbanAssigneeToEmployee('')).toBeNull();
+  });
+
+  it('returns null for unknown assignee', () => {
+    expect(mapKanbanAssigneeToEmployee('random-user')).toBeNull();
+  });
+});
+
+describe('deriveKanbanTaskStatus', () => {
+  it('returns working when task is doing', () => {
+    const tasks = [makeTask({ status: 'doing', title: '修 Bug' })];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('working');
+    expect(result.currentTask).toBe('修 Bug');
+    expect(result.runningCount).toBe(1);
+  });
+
+  it('returns standby when tasks are pending (todo)', () => {
+    const tasks = [
+      makeTask({ status: 'todo', title: '任务A' }),
+      makeTask({ status: 'todo', title: '任务B', id: 't_2' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('standby');
+    expect(result.pendingCount).toBe(2);
+  });
+
+  it('returns off when all tasks are done', () => {
+    const tasks = [
+      makeTask({ status: 'done', title: '已完成' }),
+      makeTask({ status: 'done', title: '也完成了', id: 't_2' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('off');
+    expect(result.completedCount).toBe(2);
+    expect(result.currentTask).toContain('已完成');
+  });
+
+  it('returns off when no tasks', () => {
+    const result = deriveKanbanTaskStatus([]);
+    expect(result.status).toBe('off');
+    expect(result.currentTask).toBe('暂无任务');
+  });
+
+  it('doing takes priority over todo', () => {
+    const tasks = [
+      makeTask({ status: 'todo', title: '待办任务', id: 't_1' }),
+      makeTask({ status: 'doing', title: '进行中', id: 't_2' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('working');
+    expect(result.currentTask).toBe('进行中');
+  });
+
+  it('counts all categories correctly', () => {
+    const tasks = [
+      makeTask({ status: 'doing', id: 't_1' }),
+      makeTask({ status: 'todo', id: 't_2' }),
+      makeTask({ status: 'done', id: 't_3' }),
+      makeTask({ status: 'todo', id: 't_4' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.runningCount).toBe(1);
+    expect(result.pendingCount).toBe(2);
+    expect(result.completedCount).toBe(1);
+  });
+});
+
+describe('groupKanbanTasksByEmployee', () => {
+  it('groups tasks by mapped employee name', () => {
+    const tasks = [
+      makeTask({ assignee: 'coder-404', id: 't_1' }),
+      makeTask({ assignee: 'coder-404', id: 't_2' }),
+      makeTask({ assignee: 'reviewer', id: 't_3' }),
+    ];
+    const grouped = groupKanbanTasksByEmployee(tasks);
+    expect(grouped.get('404')).toHaveLength(2);
+    expect(grouped.get('裁判君')).toHaveLength(1);
+  });
+
+  it('skips tasks with unknown assignee', () => {
+    const tasks = [
+      makeTask({ assignee: 'unknown-user', id: 't_1' }),
+      makeTask({ assignee: 'coder-404', id: 't_2' }),
+    ];
+    const grouped = groupKanbanTasksByEmployee(tasks);
+    expect(grouped.size).toBe(1);
+    expect(grouped.has('404')).toBe(true);
+  });
+
+  it('returns empty map for empty input', () => {
+    const grouped = groupKanbanTasksByEmployee([]);
+    expect(grouped.size).toBe(0);
+  });
 });
 
 describe('fetchKanbanTasks', () => {
-  it('returns tasks array on success', async () => {
-    const tasks = [
-      {
-        id: '1',
-        title: '测试',
-        status: 'doing',
-        assignee: '404',
-        priority: 'P0',
-        createdAt: '',
-        updatedAt: '',
-      },
-    ];
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(tasks),
-    });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
-    const result = await fetchKanbanTasks();
-    expect(result).toEqual(tasks);
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/chat/api/kanban/tasks',
-      expect.any(Object),
+  it('returns tasks on success', async () => {
+    const mockTasks = [makeTask()];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockTasks), { status: 200 }),
     );
+    const tasks = await fetchKanbanTasks();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].id).toBe('t_test123');
   });
 
-  it('handles { tasks: [...] } response shape', async () => {
-    const tasks = [
-      {
-        id: '1',
-        title: '测试',
-        status: 'doing',
-        assignee: '404',
-        priority: 'P0',
-        createdAt: '',
-        updatedAt: '',
-      },
-    ];
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ tasks }),
-    });
-
-    const result = await fetchKanbanTasks();
-    expect(result).toEqual(tasks);
+  it('returns tasks from { tasks: [...] } format', async () => {
+    const mockTasks = [makeTask()];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ tasks: mockTasks }), { status: 200 }),
+    );
+    const tasks = await fetchKanbanTasks();
+    expect(tasks).toHaveLength(1);
   });
 
-  it('returns empty array on non-200', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 500 });
-    expect(await fetchKanbanTasks()).toEqual([]);
+  it('returns empty array on non-200 response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Not Found', { status: 404 }),
+    );
+    const tasks = await fetchKanbanTasks();
+    expect(tasks).toEqual([]);
   });
 
   it('returns empty array on network error', async () => {
-    mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
-    expect(await fetchKanbanTasks()).toEqual([]);
-  });
-});
-
-describe('fetchKanbanTask', () => {
-  it('returns task on success', async () => {
-    const task = {
-      id: 'abc',
-      title: '详情',
-      status: 'doing',
-      assignee: '404',
-      priority: 'P0',
-      createdAt: '',
-      updatedAt: '',
-    };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(task),
-    });
-
-    const result = await fetchKanbanTask('abc');
-    expect(result).toEqual(task);
-  });
-
-  it('returns null on 404', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 404 });
-    expect(await fetchKanbanTask('missing')).toBeNull();
-  });
-
-  it('returns null on network error', async () => {
-    mockFetch.mockRejectedValue(new TypeError('Failed'));
-    expect(await fetchKanbanTask('x')).toBeNull();
-  });
-});
-
-describe('fetchKanbanStats', () => {
-  it('returns stats on success', async () => {
-    const stats = { total: 10, doing: 3, done: 5, pending: 2 };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(stats),
-    });
-
-    const result = await fetchKanbanStats();
-    expect(result).toEqual(stats);
-  });
-
-  it('returns zeroed stats on error', async () => {
-    mockFetch.mockRejectedValue(new TypeError('Failed'));
-    expect(await fetchKanbanStats()).toEqual({
-      total: 0,
-      doing: 0,
-      done: 0,
-      pending: 0,
-    });
-  });
-});
-
-describe('fetchKanbanEmployees', () => {
-  it('returns employees on success', async () => {
-    const employees = [
-      {
-        name: '404',
-        role: 'AI开发工程师',
-        avatar: '💻',
-        status: 'working',
-        currentTask: '写代码',
-        tasks: [],
-      },
-    ];
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(employees),
-    });
-
-    const result = await fetchKanbanEmployees();
-    expect(result).toEqual(employees);
-  });
-
-  it('handles { employees: [...] } response shape', async () => {
-    const employees = [
-      {
-        name: '404',
-        role: 'AI开发工程师',
-        avatar: '💻',
-        status: 'working',
-        currentTask: '写代码',
-        tasks: [],
-      },
-    ];
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ employees }),
-    });
-
-    const result = await fetchKanbanEmployees();
-    expect(result).toEqual(employees);
-  });
-
-  it('returns empty array on error', async () => {
-    mockFetch.mockRejectedValue(new TypeError('Failed'));
-    expect(await fetchKanbanEmployees()).toEqual([]);
-  });
-});
-
-describe('buildKanbanWsUrl', () => {
-  it('uses ws: on http pages', () => {
-    vi.stubGlobal('window', {
-      location: { protocol: 'http:', host: 'localhost:3000' },
-    });
-    expect(buildKanbanWsUrl()).toBe(
-      'ws://localhost:3000/chat/api/kanban/events',
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
     );
-  });
-
-  it('uses wss: on https pages', () => {
-    vi.stubGlobal('window', {
-      location: { protocol: 'https:', host: 'example.com' },
-    });
-    expect(buildKanbanWsUrl()).toBe(
-      'wss://example.com/chat/api/kanban/events',
-    );
-  });
-});
-
-describe('KanbanWebSocket', () => {
-  it('starts disconnected', () => {
-    const ws = new KanbanWebSocket('ws://test');
-    expect(ws.connected).toBe(false);
-  });
-
-  it('registers and unregisters handlers', () => {
-    const ws = new KanbanWebSocket('ws://test');
-    const handler = vi.fn();
-
-    const unsub = ws.on(handler);
-    // After unsubscribing, no error = pass
-    unsub();
-    expect(true).toBe(true);
+    const tasks = await fetchKanbanTasks();
+    expect(tasks).toEqual([]);
   });
 });

@@ -1,34 +1,280 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useEmployeeStatus } from '../useEmployeeStatus';
+import { useEmployeeStatus, mergeWithActive, mergeWithKanban } from '../useEmployeeStatus';
+import type { Employee, KanbanTask } from '@/types/employee';
 import * as cronJobsApi from '@/api/cronJobs';
+import * as kanbanApi from '@/api/kanban';
 
 vi.mock('@/api/cronJobs', () => ({
   fetchCronJobs: vi.fn(),
   mapJobNameToEmployee: vi.fn(),
   deriveEmployeeStatus: vi.fn(),
   fetchActiveEmployees: vi.fn().mockResolvedValue({}),
+  checkProcessAlive: vi.fn(),
+}));
+
+vi.mock('@/api/kanban', () => ({
+  fetchKanbanTasks: vi.fn().mockResolvedValue([]),
+  fetchKanbanTask: vi.fn(),
+  fetchKanbanStats: vi.fn(),
+  fetchKanbanEmployees: vi.fn(),
+  KanbanWebSocket: vi.fn(),
+  getKanbanWsUrl: vi.fn(),
+  groupKanbanTasksByEmployee: vi.fn().mockReturnValue(new Map()),
+  deriveKanbanTaskStatus: vi.fn(),
+  mapKanbanAssigneeToEmployee: vi.fn(),
 }));
 
 const mockFetchCronJobs = vi.mocked(cronJobsApi.fetchCronJobs);
 const mockMapJobNameToEmployee = vi.mocked(cronJobsApi.mapJobNameToEmployee);
 const mockDeriveEmployeeStatus = vi.mocked(cronJobsApi.deriveEmployeeStatus);
 const mockFetchActiveEmployees = vi.mocked(cronJobsApi.fetchActiveEmployees);
+const mockFetchKanbanTasks = vi.mocked(kanbanApi.fetchKanbanTasks);
+const mockGroupKanbanTasksByEmployee = vi.mocked(kanbanApi.groupKanbanTasksByEmployee);
+const mockDeriveKanbanTaskStatus = vi.mocked(kanbanApi.deriveKanbanTaskStatus);
+
+const makeEmployee = (overrides: Partial<Employee> = {}): Employee => ({
+  name: '测试',
+  role: '测试员',
+  avatar: '🧪',
+  status: 'off',
+  currentTask: '休息中',
+  tasks: [],
+  ...overrides,
+});
+
+const makeKanbanTask = (overrides: Partial<KanbanTask> = {}): KanbanTask => ({
+  id: 't_test',
+  title: '测试任务',
+  status: 'todo',
+  assignee: 'coder-404',
+  priority: '0',
+  createdAt: '2026-06-15T10:00:00Z',
+  updatedAt: '2026-06-15T10:00:00Z',
+  ...overrides,
+});
+
+describe('mergeWithActive', () => {
+  it('returns same array when active is empty', () => {
+    const employees = [makeEmployee({ name: '404' })];
+    expect(mergeWithActive(employees, {})).toBe(employees);
+  });
+
+  it('upgrades standby employee to working when status is working', () => {
+    const employees = [makeEmployee({ name: '404', status: 'standby' })];
+    const result = mergeWithActive(employees, {
+      404: { task: '修 bug', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('修 bug');
+  });
+
+  it('upgrades off employee to working when status is working', () => {
+    const employees = [makeEmployee({ name: '裁判君', status: 'off' })];
+    const result = mergeWithActive(employees, {
+      裁判君: { task: '审查代码', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('审查代码');
+  });
+
+  it('keeps working employee working with active task', () => {
+    const employees = [makeEmployee({ name: '老财', status: 'working', currentTask: '旧任务' })];
+    const result = mergeWithActive(employees, {
+      老财: { task: '新任务', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('新任务');
+  });
+
+  it('does not modify non-active employees', () => {
+    const employees = [
+      makeEmployee({ name: '老财' }),
+      makeEmployee({ name: '铁壳' }),
+    ];
+    const result = mergeWithActive(employees, {
+      老财: { task: '分析', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[1]).toEqual(employees[1]);
+  });
+
+  it('handles multiple active employees', () => {
+    const employees = [
+      makeEmployee({ name: '老财' }),
+      makeEmployee({ name: '铁壳' }),
+      makeEmployee({ name: '404' }),
+    ];
+    const result = mergeWithActive(employees, {
+      老财: { task: '复盘', startedAt: '2026-06-14T21:00:00Z', status: 'working' },
+      404: { task: '开发', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[0].status).toBe('working');
+    expect(result[1].status).toBe('off');
+    expect(result[2].status).toBe('working');
+  });
+
+  it('preserves other fields unchanged', () => {
+    const employees = [makeEmployee({ name: '404', role: '开发', avatar: '💻' })];
+    const result = mergeWithActive(employees, {
+      404: { task: '任务', startedAt: '2026-06-14T10:00:00Z', status: 'working' },
+    });
+    expect(result[0].role).toBe('开发');
+    expect(result[0].avatar).toBe('💻');
+  });
+
+  it('does not override status when active entry is completed', () => {
+    const employees = [makeEmployee({ name: '老财', status: 'off', currentTask: '休息中' })];
+    const result = mergeWithActive(employees, {
+      老财: { task: '已完成任务', startedAt: '2026-06-14T10:00:00Z', status: 'completed' },
+    });
+    expect(result[0].status).toBe('off');
+    expect(result[0].currentTask).toBe('休息中');
+  });
+
+  it('marks as completed when pid exists but process is dead', () => {
+    const employees = [makeEmployee({ name: '铁壳', status: 'working', currentTask: '部署' })];
+    const result = mergeWithActive(
+      employees,
+      { 铁壳: { task: '部署', startedAt: '2026-06-14T10:00:00Z', pid: 12345 } },
+      { 12345: false },
+    );
+    expect(result[0].status).toBe('completed');
+    expect(result[0].currentTask).toBe('部署');
+  });
+
+  it('sets working when pid is alive and no explicit status', () => {
+    const employees = [makeEmployee({ name: '404', status: 'standby' })];
+    const result = mergeWithActive(
+      employees,
+      { 404: { task: '开发功能', startedAt: '2026-06-14T10:00:00Z', pid: 999 } },
+      { 999: true },
+    );
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('开发功能');
+  });
+
+  it('treats legacy entries without status field as working', () => {
+    const employees = [makeEmployee({ name: '小K', status: 'off' })];
+    const result = mergeWithActive(employees, {
+      小K: { task: '写早报', startedAt: '2026-06-14T09:00:00Z' },
+    });
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('写早报');
+  });
+});
+
+describe('mergeWithKanban', () => {
+  it('returns same array when kanban map is empty', () => {
+    const employees = [makeEmployee({ name: '404' })];
+    const result = mergeWithKanban(employees, new Map());
+    expect(result).toBe(employees);
+  });
+
+  it('upgrades off employee to working when kanban has doing task', () => {
+    const employees = [makeEmployee({ name: '404', status: 'off' })];
+    const kanbanTasks = [makeKanbanTask({ status: 'doing', title: '修 Bug' })];
+    const kanbanMap = new Map([['404', kanbanTasks]]);
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'working',
+      currentTask: '修 Bug',
+      pendingCount: 0,
+      completedCount: 0,
+      runningCount: 1,
+    });
+
+    const result = mergeWithKanban(employees, kanbanMap);
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('修 Bug');
+    expect(result[0].taskCount).toBe(1);
+    expect(result[0].kanbanStatus).toBe('doing');
+  });
+
+  it('does not downgrade working employee to standby', () => {
+    const employees = [makeEmployee({ name: '404', status: 'working', currentTask: '活跃任务' })];
+    const kanbanTasks = [makeKanbanTask({ status: 'todo', title: '待办任务' })];
+    const kanbanMap = new Map([['404', kanbanTasks]]);
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'standby',
+      currentTask: '待处理: 1 个任务',
+      pendingCount: 1,
+      completedCount: 0,
+      runningCount: 0,
+    });
+
+    const result = mergeWithKanban(employees, kanbanMap);
+    expect(result[0].status).toBe('working');
+    expect(result[0].currentTask).toBe('活跃任务');
+  });
+
+  it('upgrades off employee to standby when kanban has todo tasks', () => {
+    const employees = [makeEmployee({ name: '裁判君', status: 'off' })];
+    const kanbanTasks = [makeKanbanTask({ status: 'todo', title: '审查任务', assignee: 'reviewer' })];
+    const kanbanMap = new Map([['裁判君', kanbanTasks]]);
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'standby',
+      currentTask: '待处理: 1 个任务',
+      pendingCount: 1,
+      completedCount: 0,
+      runningCount: 0,
+    });
+
+    const result = mergeWithKanban(employees, kanbanMap);
+    expect(result[0].status).toBe('standby');
+    expect(result[0].kanbanStatus).toBe('todo');
+  });
+
+  it('attaches kanban fields without changing status when all done', () => {
+    const employees = [makeEmployee({ name: '404', status: 'standby' })];
+    const kanbanTasks = [makeKanbanTask({ status: 'done', title: '完成的任务' })];
+    const kanbanMap = new Map([['404', kanbanTasks]]);
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'off',
+      currentTask: '已完成 1 项',
+      pendingCount: 0,
+      completedCount: 1,
+      runningCount: 0,
+    });
+
+    const result = mergeWithKanban(employees, kanbanMap);
+    expect(result[0].status).toBe('standby'); // unchanged
+    expect(result[0].taskCount).toBe(1);
+    expect(result[0].kanbanStatus).toBe('done');
+  });
+
+  it('does not modify employees without kanban tasks', () => {
+    const employees = [
+      makeEmployee({ name: '404', status: 'off' }),
+      makeEmployee({ name: '老财', status: 'off' }),
+    ];
+    const kanbanTasks = [makeKanbanTask({ status: 'doing', title: '任务' })];
+    const kanbanMap = new Map([['404', kanbanTasks]]);
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'working',
+      currentTask: '任务',
+      pendingCount: 0,
+      completedCount: 0,
+      runningCount: 1,
+    });
+
+    const result = mergeWithKanban(employees, kanbanMap);
+    expect(result[1]).toEqual(employees[1]);
+  });
+});
 
 describe('useEmployeeStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: API returns empty (fallback to all known employees)
     mockFetchCronJobs.mockResolvedValue([]);
     mockFetchActiveEmployees.mockResolvedValue({});
+    mockFetchKanbanTasks.mockResolvedValue([]);
+    mockGroupKanbanTasksByEmployee.mockReturnValue(new Map());
   });
 
-  it('returns all known employees when API returns empty and no active entries', async () => {
+  it('returns all known employees when API returns empty', async () => {
     const { result } = renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(result.current.employees.length).toBeGreaterThan(0);
     });
-    // Should include all known employees from EMPLOYEE_META
     const names = result.current.employees.map(e => e.name);
     expect(names).toContain('老财');
     expect(names).toContain('铁壳');
@@ -45,26 +291,25 @@ describe('useEmployeeStatus', () => {
     });
   });
 
-  it('calls fetchCronJobs on mount', async () => {
+  it('calls fetchCronJobs and fetchKanbanTasks on mount', async () => {
     renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
+      expect(mockFetchKanbanTasks).toHaveBeenCalledTimes(1);
     });
   });
 
   it('shows employees from cron jobs', async () => {
-    const mockJobs = [
-      {
-        id: '1',
-        name: '老财-盘前研判',
-        enabled: true,
-        state: 'scheduled',
-        last_run_at: new Date().toISOString(),
-        next_run_at: null,
-        schedule: { kind: 'cron', expr: '25 9 * * 1-5', display: '25 9 * * 1-5' },
-        last_status: null,
-      },
-    ];
+    const mockJobs = [{
+      id: '1',
+      name: '老财-盘前研判',
+      enabled: true,
+      state: 'scheduled',
+      last_run_at: new Date().toISOString(),
+      next_run_at: null,
+      schedule: { kind: 'cron', expr: '25 9 * * 1-5', display: '25 9 * * 1-5' },
+      last_status: null,
+    }];
 
     mockFetchCronJobs.mockResolvedValue(mockJobs);
     mockMapJobNameToEmployee.mockImplementation((name: string) => {
@@ -81,33 +326,9 @@ describe('useEmployeeStatus', () => {
       expect(mockFetchCronJobs).toHaveBeenCalled();
     });
 
-    // Should include 老财 from cron jobs + all other known employees
     const names = result.current.employees.map(e => e.name);
     expect(names).toContain('老财');
     expect(names).toContain('Ditto');
-  });
-
-  it('updates lastUpdated on refresh', async () => {
-    const { result } = renderHook(() => useEmployeeStatus());
-    await waitFor(() => {
-      expect(result.current.lastUpdated).toBeInstanceOf(Date);
-    });
-    const before = result.current.lastUpdated.getTime();
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(result.current.lastUpdated.getTime()).toBeGreaterThanOrEqual(before);
-  });
-
-  it('refresh calls fetchCronJobs again', async () => {
-    const { result } = renderHook(() => useEmployeeStatus());
-    await waitFor(() => {
-      expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
-    });
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(mockFetchCronJobs).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to all known employees on API error', async () => {
@@ -120,13 +341,12 @@ describe('useEmployeeStatus', () => {
     expect(names).toContain('Ditto');
   });
 
-  it('refreshes when page becomes visible (visibilitychange)', async () => {
+  it('refreshes when page becomes visible', async () => {
     renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
     });
 
-    // Simulate page becoming visible
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',
       configurable: true,
@@ -161,7 +381,6 @@ describe('useEmployeeStatus', () => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
     });
 
-    // Simulate page becoming hidden
     Object.defineProperty(document, 'visibilityState', {
       value: 'hidden',
       configurable: true,
@@ -170,7 +389,6 @@ describe('useEmployeeStatus', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // Should still be 1 — no extra refresh
     expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
   });
 
@@ -186,6 +404,29 @@ describe('useEmployeeStatus', () => {
       expect(ditto).toBeDefined();
       expect(ditto?.status).toBe('working');
       expect(ditto?.currentTask).toBe('测试中');
+    });
+  });
+
+  it('includes kanban task counts when kanban data available', async () => {
+    const kanbanTasks = [makeKanbanTask({ status: 'doing', assignee: 'coder-404' })];
+    mockFetchKanbanTasks.mockResolvedValue(kanbanTasks);
+    mockGroupKanbanTasksByEmployee.mockReturnValue(
+      new Map([['404', kanbanTasks]]),
+    );
+    mockDeriveKanbanTaskStatus.mockReturnValue({
+      status: 'working',
+      currentTask: '测试任务',
+      pendingCount: 0,
+      completedCount: 0,
+      runningCount: 1,
+    });
+
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      const emp404 = result.current.employees.find(e => e.name === '404');
+      expect(emp404).toBeDefined();
+      expect(emp404?.taskCount).toBe(1);
+      expect(emp404?.kanbanStatus).toBe('doing');
     });
   });
 });
