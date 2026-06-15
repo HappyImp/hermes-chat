@@ -179,5 +179,24 @@ export function useEmployeeStatus() {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  // 立即刷新：页面重新可见或窗口获焦时
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+    const handleFocus = () => {
+      refresh();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refresh]);
+
   return { employees, lastUpdated, refresh };
 }

@@ -173,6 +173,15 @@ export const useSessionStore = create<SessionStore>()(
     }),
     {
       name: 'hermes_chat_sessions',
+      partialize: (state) => {
+        // isStreaming 是运行时状态，不应持久化到 localStorage
+        const { isStreaming, ...rest } = state;
+        return rest;
+      },
+      merge: (persisted, current) => {
+        // 防止旧 localStorage 中残留的 isStreaming: true 被恢复
+        return { ...current, ...(persisted as Partial<SessionStore>), isStreaming: false };
+      },
     },
   ),
 );

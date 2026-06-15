@@ -54,7 +54,8 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
-| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（33 文件 / 265 测试全部通过） |
+|| [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（33 文件 / 265 测试全部通过） |
+|| [test/2026-06-15_test-report.md](test/2026-06-15_test-report.md) | 2026-06-15 | 测试报告（33 文件 / 271 测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
 
@@ -79,3 +80,4 @@
 || [backlog/2026-06-14_taskstatus-polling-fix.md](backlog/2026-06-14_taskstatus-polling-fix.md) | 2026-06-14 | TaskStatus 轮询修复（1🔴+5🟡） |
 || [backlog/2026-06-14_auth-login-register-review.md](backlog/2026-06-14_auth-login-register-review.md) | 2026-06-14 | 登录/注册功能审查（1🟡+2🟢） |
 || [backlog/2026-06-14_auth-logout-review.md](backlog/2026-06-14_auth-logout-review.md) | 2026-06-14 | 登出功能审查（6🟡+3🟢） |
+|| [backlog/2026-06-15_bug-fixes.md](backlog/2026-06-15_bug-fixes.md) | 2026-06-15 | 两个前端 bug 修复（员工列表刷新 + 发送按钮置灰） |

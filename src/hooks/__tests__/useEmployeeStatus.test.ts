@@ -120,6 +120,60 @@ describe('useEmployeeStatus', () => {
     expect(names).toContain('Ditto');
   });
 
+  it('refreshes when page becomes visible (visibilitychange)', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
+    });
+
+    // Simulate page becoming visible
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await waitFor(() => {
+      expect(mockFetchCronJobs).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('refreshes on window focus event', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(mockFetchCronJobs).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('does NOT refresh when visibility changes to hidden', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
+    });
+
+    // Simulate page becoming hidden
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Should still be 1 — no extra refresh
+    expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
+  });
+
   it('includes employees from active entries', async () => {
     mockFetchCronJobs.mockResolvedValue([]);
     mockFetchActiveEmployees.mockResolvedValue({

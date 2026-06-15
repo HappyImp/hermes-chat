@@ -108,4 +108,27 @@ describe('sessionStore', () => {
     expect(state.currentChannel).toBe('default');
     expect(state.sessions['default']).toHaveLength(1);
   });
+
+  it('does not persist isStreaming to localStorage', async () => {
+    useSessionStore.setState({ isStreaming: true });
+    // persist writes asynchronously — wait for it
+    await new Promise((r) => setTimeout(r, 50));
+    const stored = JSON.parse(localStorage.getItem('hermes_chat_sessions') || '{}');
+    expect(stored.state?.isStreaming).toBeUndefined();
+  });
+
+  it('isStreaming defaults to false even if stale localStorage has true', async () => {
+    // Simulate stale persisted data with isStreaming: true (from old code)
+    localStorage.setItem(
+      'hermes_chat_sessions',
+      JSON.stringify({
+        state: { sessions: {}, currentChannel: 'default', currentSessionId: null, isStreaming: true },
+        version: 0,
+      }),
+    );
+    // Trigger rehydration — merge function should force isStreaming to false
+    useSessionStore.persist.rehydrate();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(useSessionStore.getState().isStreaming).toBe(false);
+  });
 });
