@@ -61,13 +61,13 @@ impl KanbanService {
 
     /// 查询员工列表（从 hermes profiles + kanban assignees 推导）
     /// 缓存 5 分钟，CLI 失败时降级返回空列表
-    pub async fn get_employees(&self, tenant_id: &str) -> Result<Vec<EmployeeInfo>, AppError> {
+    pub async fn get_employees(&self, pool: &DbPool, tenant_id: &str) -> Result<Vec<EmployeeInfo>, AppError> {
         // 检查缓存
         {
             let cache = self.employee_cache.read().await;
             if let Some((ts, ref employees)) = *cache {
                 if ts.elapsed() < CACHE_TTL {
-                    return Ok(Self::filter_by_tenant(employees, tenant_id));
+                    return Ok(Self::filter_by_tenant(pool, employees, tenant_id).await);
                 }
             }
         }
@@ -81,7 +81,7 @@ impl KanbanService {
             *cache = Some((Instant::now(), employees.clone()));
         }
 
-        Ok(Self::filter_by_tenant(&employees, tenant_id))
+        Ok(Self::filter_by_tenant(pool, &employees, tenant_id).await)
     }
 
     /// 从 hermes CLI 获取员工列表
@@ -172,10 +172,33 @@ impl KanbanService {
             .filter(|s| !s.is_empty())
     }
 
-    /// 按 tenant 过滤员工（当前版本不过滤，返回全量）
-    /// 后续可基于 kanban_tasks.assignee 做租户级过滤
-    fn filter_by_tenant(employees: &[EmployeeInfo], _tenant_id: &str) -> Vec<EmployeeInfo> {
-        employees.to_vec()
+    /// 按 tenant 过滤员工：查询 permissions 表获取该 tenant 允许的员工名
+    /// 返回 employees 中 name 在允许列表里的子集
+    /// 若 permissions 表无该 tenant 的记录，返回空列表（严格隔离）
+    pub async fn filter_by_tenant(
+        pool: &DbPool,
+        employees: &[EmployeeInfo],
+        tenant_id: &str,
+    ) -> Vec<EmployeeInfo> {
+        let allowed_names: std::collections::HashSet<String> = match sqlx::query_as::<_, (String,)>(
+            "SELECT DISTINCT employee FROM permissions WHERE tenant = ? AND allowed = 1",
+        )
+        .bind(tenant_id)
+        .fetch_all(pool)
+        .await
+        {
+            Ok(rows) => rows.into_iter().map(|(name,)| name).collect(),
+            Err(e) => {
+                tracing::warn!("查询 tenant 权限失败: {}，返回空列表", e);
+                return vec![];
+            }
+        };
+
+        employees
+            .iter()
+            .filter(|emp| allowed_names.contains(&emp.name))
+            .cloned()
+            .collect()
     }
 
     // ==================== KAN-207: 权限模型 ====================

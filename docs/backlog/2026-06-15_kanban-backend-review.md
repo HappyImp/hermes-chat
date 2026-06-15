@@ -67,6 +67,24 @@ let stats = state.kanban_service.get_stats(&tenant_id).await?;
 
 ---
 
+### 3.5. `filter_by_tenant` 空壳实现
+
+**文件**: `backend/src/services/kanban.rs:175-179`
+
+**问题**: `filter_by_tenant` 直接返回全量员工（`employees.to_vec()`），tenant 隔离形同虚设。任何 tenant 下的用户都能看到全部员工。
+
+**修复方案**:
+- 改为 async + 接收 `pool: &DbPool` 参数
+- 查询 `permissions` 表: `SELECT DISTINCT employee FROM permissions WHERE tenant = ? AND allowed = 1`
+- 用 `HashSet` 做 O(1) 过滤
+- 无 permissions 记录时返回空列表（严格隔离）
+- 同步更新 `get_employees` 签名和 2 个 handler 调用点
+
+**优先级**: P0 — 安全漏洞
+**修复记录**: ✅ 已修复（filter_by_tenant 实现 + 5 个新测试覆盖）
+
+---
+
 ## 🟡 中等问题（建议修复）
 
 ### 4. 文档未正确索引

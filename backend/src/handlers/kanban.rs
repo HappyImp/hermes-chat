@@ -49,7 +49,7 @@ pub async fn get_employees(
     _auth: AuthUser,
     tenant: TenantScope,
 ) -> Result<Json<Value>, AppError> {
-    let employees = state.kanban_service.get_employees(tenant.as_str()).await?;
+    let employees = state.kanban_service.get_employees(&state.pool, tenant.as_str()).await?;
 
     Ok(Json(json!({ "employees": employees })))
 }

@@ -5,6 +5,7 @@ use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 
 use hermes_chat_backend::db::pool::run_migrations;
+use hermes_chat_backend::models::kanban::EmployeeInfo;
 use hermes_chat_backend::services::kanban::KanbanService;
 
 /// 创建测试用内存数据库（每个测试独立）
@@ -132,18 +133,12 @@ async fn test_get_stats_stub_returns_zero_stats() {
 
 #[tokio::test]
 async fn test_get_employees_returns_profiles() {
+    let pool = setup_db().await;
     let svc = KanbanService::new();
-    let employees = svc.get_employees("any-tenant").await.unwrap();
-    // 已对接 hermes CLI，应返回 profile 列表（至少有 coder-404 等）
-    // 不再是空列表
-    for emp in &employees {
-        assert!(!emp.name.is_empty(), "员工 name 不应为空");
-        assert!(
-            emp.status == "working" || emp.status == "standby",
-            "状态应为 working 或 standby，实际: {}",
-            emp.status
-        );
-    }
+    // filter_by_tenant 需要 permissions 表有数据，无权限时返回空列表
+    let employees = svc.get_employees(&pool, "any-tenant").await.unwrap();
+    // 无 permissions 记录，严格隔离应返回空
+    assert!(employees.is_empty(), "无 permissions 记录时应返回空列表");
 }
 
 // ==================== Default / new 测试 ====================
@@ -266,4 +261,157 @@ async fn test_check_tenant_access_denied() {
         .unwrap();
 
     assert!(!has_access, "未映射的 tenant 应无访问权限");
+}
+
+// ==================== filter_by_tenant 测试 ====================
+
+/// 辅助函数：给 tenant 添加员工权限
+async fn grant_employee_permission(
+    pool: &SqlitePool,
+    user_id: &str,
+    employee: &str,
+    tenant: &str,
+) {
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO permissions (id, user_id, employee, allowed, tenant) VALUES (?, ?, ?, 1, ?)",
+    )
+    .bind(&id)
+    .bind(user_id)
+    .bind(employee)
+    .bind(tenant)
+    .execute(pool)
+    .await
+    .expect("授予权限失败");
+}
+
+#[tokio::test]
+async fn test_filter_by_tenant_returns_only_allowed_employees() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "filter_user").await;
+
+    // 授权 tenant-a 只能看到 alice 和 bob
+    grant_employee_permission(&pool, &user_id, "alice", "tenant-a").await;
+    grant_employee_permission(&pool, &user_id, "bob", "tenant-a").await;
+
+    let employees = vec![
+        EmployeeInfo {
+            name: "alice".to_string(),
+            role: "工程师".to_string(),
+            status: "working".to_string(),
+        },
+        EmployeeInfo {
+            name: "bob".to_string(),
+            role: "设计师".to_string(),
+            status: "standby".to_string(),
+        },
+        EmployeeInfo {
+            name: "charlie".to_string(),
+            role: "测试".to_string(),
+            status: "working".to_string(),
+        },
+    ];
+
+    let filtered = KanbanService::filter_by_tenant(&pool, &employees, "tenant-a").await;
+
+    assert_eq!(filtered.len(), 2, "应只返回 alice 和 bob");
+    assert!(filtered.iter().any(|e| e.name == "alice"));
+    assert!(filtered.iter().any(|e| e.name == "bob"));
+    assert!(!filtered.iter().any(|e| e.name == "charlie"));
+}
+
+#[tokio::test]
+async fn test_filter_by_tenant_no_permissions_returns_empty() {
+    let pool = setup_db().await;
+
+    let employees = vec![EmployeeInfo {
+        name: "alice".to_string(),
+        role: "工程师".to_string(),
+        status: "working".to_string(),
+    }];
+
+    let filtered = KanbanService::filter_by_tenant(&pool, &employees, "unknown-tenant").await;
+
+    assert!(filtered.is_empty(), "无 permissions 记录应返回空列表");
+}
+
+#[tokio::test]
+async fn test_filter_by_tenant_different_tenants_isolated() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "isolated_user").await;
+
+    // tenant-a 只有 alice，tenant-b 只有 bob
+    grant_employee_permission(&pool, &user_id, "alice", "tenant-a").await;
+    grant_employee_permission(&pool, &user_id, "bob", "tenant-b").await;
+
+    let employees = vec![
+        EmployeeInfo {
+            name: "alice".to_string(),
+            role: "工程师".to_string(),
+            status: "working".to_string(),
+        },
+        EmployeeInfo {
+            name: "bob".to_string(),
+            role: "设计师".to_string(),
+            status: "standby".to_string(),
+        },
+    ];
+
+    let filtered_a = KanbanService::filter_by_tenant(&pool, &employees, "tenant-a").await;
+    let filtered_b = KanbanService::filter_by_tenant(&pool, &employees, "tenant-b").await;
+
+    assert_eq!(filtered_a.len(), 1, "tenant-a 应只有 alice");
+    assert_eq!(filtered_a[0].name, "alice");
+    assert_eq!(filtered_b.len(), 1, "tenant-b 应只有 bob");
+    assert_eq!(filtered_b[0].name, "bob");
+}
+
+#[tokio::test]
+async fn test_filter_by_tenant_denied_employee_excluded() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "deny_user").await;
+
+    // alice 允许，bob 拒绝
+    grant_employee_permission(&pool, &user_id, "alice", "tenant-x").await;
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO permissions (id, user_id, employee, allowed, tenant) VALUES (?, ?, ?, 0, ?)",
+    )
+    .bind(&id)
+    .bind(&user_id)
+    .bind("bob")
+    .bind("tenant-x")
+    .execute(&pool)
+    .await
+    .expect("插入拒绝权限失败");
+
+    let employees = vec![
+        EmployeeInfo {
+            name: "alice".to_string(),
+            role: "工程师".to_string(),
+            status: "working".to_string(),
+        },
+        EmployeeInfo {
+            name: "bob".to_string(),
+            role: "设计师".to_string(),
+            status: "standby".to_string(),
+        },
+    ];
+
+    let filtered = KanbanService::filter_by_tenant(&pool, &employees, "tenant-x").await;
+
+    assert_eq!(filtered.len(), 1, "allowed=0 的员工应被排除");
+    assert_eq!(filtered[0].name, "alice");
+}
+
+#[tokio::test]
+async fn test_filter_by_tenant_empty_employees_returns_empty() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "empty_user").await;
+    grant_employee_permission(&pool, &user_id, "alice", "tenant-z").await;
+
+    let employees: Vec<EmployeeInfo> = vec![];
+    let filtered = KanbanService::filter_by_tenant(&pool, &employees, "tenant-z").await;
+
+    assert!(filtered.is_empty(), "空员工列表应返回空");
 }
