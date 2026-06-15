@@ -1,5 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Employee } from '@/types/employee';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Employee, KanbanTask } from '@/types/employee';
+import { kanbanStatusToEmployeeStatus } from '@/types/employee';
+import {
+  fetchKanbanEmployees,
+  fetchKanbanTasks,
+  KanbanWebSocket,
+  buildKanbanWsUrl,
+} from '@/api/kanban';
+import type { KanbanEvent } from '@/api/kanban';
 import {
   fetchCronJobs,
   mapJobNameToEmployee,
@@ -11,12 +19,16 @@ import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
 
 /** Default employee metadata (role, avatar, tasks) for known employees */
 const EMPLOYEE_META: Record<string, { role: string; avatar: string; tasks: string[] }> = {
-  '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'] },
-  '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
-  '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
+  老财: {
+    role: 'AI操盘手',
+    avatar: '💰',
+    tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'],
+  },
+  铁壳: { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
+  小K: { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
   '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['每日日报', '开发任务'] },
-  '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
-  'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
+  裁判君: { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
+  Ditto: { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
 };
 
 /** Create a default employee object for a given name */
@@ -120,16 +132,83 @@ export function mergeWithActive(
   });
 }
 
+// ─── Kanban 模式 ────────────────────────────────────────────────────
+
+/** 将 kanban 任务 + 员工信息合并为 Employee[] */
+function mergeKanbanEmployees(kanbanEmployees: Employee[], tasks: KanbanTask[]): Employee[] {
+  // 按 assignee 分组任务
+  const tasksByAssignee = new Map<string, KanbanTask[]>();
+  for (const task of tasks) {
+    const list = tasksByAssignee.get(task.assignee) ?? [];
+    list.push(task);
+    tasksByAssignee.set(task.assignee, list);
+  }
+
+  return kanbanEmployees.map((emp) => {
+    const empTasks = tasksByAssignee.get(emp.name) ?? [];
+    // 找到最新的 "doing" 任务作为当前任务
+    const doingTask = empTasks.find((t) => t.status === 'doing');
+    const status = doingTask ? kanbanStatusToEmployeeStatus('doing') : emp.status;
+
+    return {
+      ...emp,
+      status,
+      currentTask: doingTask?.title ?? emp.currentTask,
+      currentTaskId: doingTask?.id,
+      taskCount: empTasks.length,
+      kanbanStatus: doingTask?.status ?? emp.kanbanStatus,
+    };
+  });
+}
+
+// ─── Hook ───────────────────────────────────────────────────────────
+
+const USE_KANBAN = import.meta.env.VITE_USE_KANBAN === 'true';
+
 export function useEmployeeStatus() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const wsRef = useRef<KanbanWebSocket | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const refresh = useCallback(async () => {
+  // ── Kanban 模式 ──────────────────────────────────────────────────
+
+  const refreshKanban = useCallback(async () => {
     try {
-      const [jobs, active] = await Promise.all([
-        fetchCronJobs(),
-        fetchActiveEmployees(),
+      const [kanbanEmployees, tasks] = await Promise.all([
+        fetchKanbanEmployees(),
+        fetchKanbanTasks(),
       ]);
+
+      if (kanbanEmployees.length > 0) {
+        setEmployees(mergeKanbanEmployees(kanbanEmployees, tasks));
+      } else {
+        // API 返回空 → 降级为默认员工列表
+        const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
+        setEmployees(fallback);
+      }
+    } catch {
+      const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
+      setEmployees(fallback);
+    }
+    setLastUpdated(new Date());
+  }, []);
+
+  const handleKanbanEvent = useCallback(
+    (event: KanbanEvent) => {
+      // 任务相关事件 → 触发刷新
+      if (event.type.startsWith('task.')) {
+        refreshKanban();
+      }
+    },
+    [refreshKanban],
+  );
+
+  // ── Legacy 模式 ──────────────────────────────────────────────────
+
+  const refreshLegacy = useCallback(async () => {
+    try {
+      const [jobs, active] = await Promise.all([fetchCronJobs(), fetchActiveEmployees()]);
 
       // Always start with all known employees
       const defaults = new Map<string, Employee>();
@@ -155,11 +234,11 @@ export function useEmployeeStatus() {
       const pids = Object.values(active)
         .map((e) => e.pid)
         .filter((pid): pid is number => pid !== undefined);
-      const aliveResults = pids.length > 0
-        ? await Promise.all(pids.map(checkProcessAlive))
-        : [];
+      const aliveResults = pids.length > 0 ? await Promise.all(pids.map(checkProcessAlive)) : [];
       const pidAliveMap: Record<number, boolean> = {};
-      pids.forEach((pid, i) => { pidAliveMap[pid] = aliveResults[i]; });
+      pids.forEach((pid, i) => {
+        pidAliveMap[pid] = aliveResults[i];
+      });
 
       setEmployees(mergeWithActive(merged, active, pidAliveMap));
     } catch {
@@ -170,11 +249,49 @@ export function useEmployeeStatus() {
     setLastUpdated(new Date());
   }, []);
 
+  // ── 主逻辑 ───────────────────────────────────────────────────────
+
+  const refresh = USE_KANBAN ? refreshKanban : refreshLegacy;
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  // Kanban 模式：WebSocket + 降级轮询
   useEffect(() => {
+    if (!USE_KANBAN) return;
+
+    const ws = new KanbanWebSocket(buildKanbanWsUrl());
+    wsRef.current = ws;
+
+    ws.on(handleKanbanEvent);
+    ws.connect();
+
+    // 定时检查 WebSocket 状态，断开时降级为 30s 轮询
+    const checkInterval = setInterval(() => {
+      if (!ws.connected && !pollingRef.current) {
+        // WebSocket 断开 → 启动降级轮询
+        pollingRef.current = setInterval(refreshKanban, 30_000);
+      } else if (ws.connected && pollingRef.current) {
+        // WebSocket 恢复 → 停止降级轮询
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    }, 5_000);
+
+    return () => {
+      ws.disconnect();
+      clearInterval(checkInterval);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [refreshKanban, handleKanbanEvent]);
+
+  // Legacy 模式：60s 轮询
+  useEffect(() => {
+    if (USE_KANBAN) return;
     const timer = setInterval(refresh, 60_000);
     return () => clearInterval(timer);
   }, [refresh]);
