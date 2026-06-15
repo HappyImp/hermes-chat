@@ -7,6 +7,8 @@
 | 文档 | 日期 | 状态 | 说明 |
 |------|------|------|------|
 | [requirements/2026-06-14_admin-panel.md](requirements/2026-06-14_admin-panel.md) | 2026-06-14 | **待开发** | 后台管理面板（授权码+用户管理+审计日志） |
+| [requirements/kanban-migration-plan.md](requirements/kanban-migration-plan.md) | 2026-06-15 | **Phase 2 审查中** | Kanban 迁移方案（PRD + 改动清单 + 验收标准） |
+| [requirements/kanban-integration-research.md](requirements/kanban-integration-research.md) | 2026-06-15 | ✅ 已完成 | Kanban 集成可行性分析（架构对比 + 技术方案） |
 
 ## 📋 需求文档 (docs/prd/)
 
@@ -81,3 +83,4 @@
 || [backlog/2026-06-14_auth-login-register-review.md](backlog/2026-06-14_auth-login-register-review.md) | 2026-06-14 | 登录/注册功能审查（1🟡+2🟢） |
 || [backlog/2026-06-14_auth-logout-review.md](backlog/2026-06-14_auth-logout-review.md) | 2026-06-14 | 登出功能审查（6🟡+3🟢） |
 || [backlog/2026-06-15_bug-fixes.md](backlog/2026-06-15_bug-fixes.md) | 2026-06-15 | 两个前端 bug 修复（员工列表刷新 + 发送按钮置灰） |
+| [backlog/2026-06-15_kanban-backend-review.md](backlog/2026-06-15_kanban-backend-review.md) | 2026-06-15 | Kanban 后端适配层审查（3🔴+3🟡+2🟢） |

@@ -23,10 +23,10 @@ pub async fn get_task(
     auth: AuthUser,
     axum::extract::Path(task_id): axum::extract::Path<String>,
 ) -> Result<Json<Value>, AppError> {
-    // 验证用户有 tenant 映射（鉴权）
-    let _tenant_id = KanbanService::get_tenant_for_user(&state.pool, &auth.user_id).await?;
+    // 验证用户有 tenant 映射（鉴权 + 隔离）
+    let tenant_id = KanbanService::get_tenant_for_user(&state.pool, &auth.user_id).await?;
 
-    let task = state.kanban_service.get_task(&task_id).await?;
+    let task = state.kanban_service.get_task(&task_id, &tenant_id).await?;
 
     Ok(Json(json!({ "task": task })))
 }
@@ -36,10 +36,10 @@ pub async fn get_stats(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Value>, AppError> {
-    // 验证用户有 tenant 映射（鉴权）
-    let _tenant_id = KanbanService::get_tenant_for_user(&state.pool, &auth.user_id).await?;
+    // 验证用户有 tenant 映射（鉴权 + 隔离）
+    let tenant_id = KanbanService::get_tenant_for_user(&state.pool, &auth.user_id).await?;
 
-    let stats = state.kanban_service.get_stats().await?;
+    let stats = state.kanban_service.get_stats(&tenant_id).await?;
 
     Ok(Json(json!({ "stats": stats })))
 }

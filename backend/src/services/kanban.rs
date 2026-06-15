@@ -24,15 +24,16 @@ impl KanbanService {
         Ok(vec![])
     }
 
-    /// 查询单个任务详情
-    pub async fn get_task(&self, _task_id: &str) -> Result<Value, AppError> {
+    /// 查询单个任务详情（必须传 tenant_id 做隔离）
+    pub async fn get_task(&self, _task_id: &str, _tenant_id: &str) -> Result<Value, AppError> {
         // TODO: 对接 hermes kanban show <task_id> --json
+        // 实现时需验证 task.tenant == tenant_id，否则返回 Forbidden
         Err(AppError::NotFound("任务不存在".to_string()))
     }
 
-    /// 查询看板统计
-    pub async fn get_stats(&self) -> Result<KanbanStats, AppError> {
-        // TODO: 对接 hermes kanban stats --json
+    /// 查询看板统计（必须传 tenant_id 做隔离）
+    pub async fn get_stats(&self, _tenant_id: &str) -> Result<KanbanStats, AppError> {
+        // TODO: 对接 hermes kanban stats --tenant <tenant_id> --json
         Ok(KanbanStats {
             total: 0,
             todo: 0,
