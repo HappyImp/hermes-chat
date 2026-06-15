@@ -221,7 +221,7 @@ describe('KanbanWebSocket', () => {
       readyState: 0, // CONNECTING
     };
     const MockWebSocket = vi.fn().mockImplementation(() => mockWs);
-    MockWebSocket.OPEN = 1;
+    (MockWebSocket as unknown as { OPEN: number }).OPEN = 1;
     vi.stubGlobal('WebSocket', MockWebSocket);
   });
 

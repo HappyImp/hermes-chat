@@ -46,6 +46,10 @@ describe('EmployeeStatus', () => {
       employees: defaultEmployees,
       lastUpdated: new Date('2026-06-14T10:00:00'),
       refresh: mockRefresh,
+      wsStatus: 'connected' as const,
+      lastWsUpdate: new Date(),
+      wsError: null,
+      reconnect: vi.fn(),
     });
   });
 
@@ -116,6 +120,10 @@ describe('EmployeeStatus', () => {
       employees: [],
       lastUpdated: new Date(),
       refresh: mockRefresh,
+      wsStatus: 'connected' as const,
+      lastWsUpdate: new Date(),
+      wsError: null,
+      reconnect: vi.fn(),
     });
     render(<EmployeeStatus onBack={vi.fn()} onOpenOffice={mockOnOpenOffice} />);
     expect(screen.getByText(/共 0 人/)).toBeInTheDocument();

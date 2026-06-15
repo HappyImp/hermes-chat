@@ -91,3 +91,4 @@
 | [backlog/2026-06-15_phase2-p1-review.md](backlog/2026-06-15_phase2-p1-review.md) | 2026-06-15 | Phase 2 P1 审查 — KAN-203/204/206（4🔴+4🟡+3🟢） |
 | [backlog/2026-06-15_phase2-p1-review-v2.md](backlog/2026-06-15_phase2-p1-review-v2.md) | 2026-06-15 | Phase 2 P1 复审 — 4🔴已修复，剩余 1🟡安全+3🟡文档 |
 | [backlog/2026-06-15_phase3-p0-review.md](backlog/2026-06-15_phase3-p0-review.md) | 2026-06-15 | Phase 3 P0 审查 — KAN-301/302/303（5🟡+3🟢） |
+| [backlog/2026-06-16_kan-304-websocket-review.md](backlog/2026-06-16_kan-304-websocket-review.md) | 2026-06-16 | KAN-304 WebSocket 实时更新审查（2🔴+8🟡+3🟢） |
