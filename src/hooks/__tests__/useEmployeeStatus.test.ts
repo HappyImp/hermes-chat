@@ -121,7 +121,7 @@ describe('useEmployeeStatus', () => {
   });
 
   it('refreshes when page becomes visible (visibilitychange)', async () => {
-    const { result } = renderHook(() => useEmployeeStatus());
+    renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
     });
@@ -141,7 +141,7 @@ describe('useEmployeeStatus', () => {
   });
 
   it('refreshes on window focus event', async () => {
-    const { result } = renderHook(() => useEmployeeStatus());
+    renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
     });
@@ -156,7 +156,7 @@ describe('useEmployeeStatus', () => {
   });
 
   it('does NOT refresh when visibility changes to hidden', async () => {
-    const { result } = renderHook(() => useEmployeeStatus());
+    renderHook(() => useEmployeeStatus());
     await waitFor(() => {
       expect(mockFetchCronJobs).toHaveBeenCalledTimes(1);
     });
