@@ -14,8 +14,8 @@ function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
     status: 'todo',
     assignee: 'coder-404',
     priority: '0',
-    createdAt: '2026-06-15T10:00:00Z',
-    updatedAt: '2026-06-15T10:00:00Z',
+    created_at: 1750000000,
+    started_at: 1750000000,
     ...overrides,
   };
 }
@@ -87,13 +87,13 @@ describe('deriveKanbanTaskStatus', () => {
     expect(result.pendingCount).toBe(2);
   });
 
-  it('returns off when all tasks are done', () => {
+  it('returns completed when all tasks are done', () => {
     const tasks = [
       makeTask({ status: 'done', title: '已完成' }),
       makeTask({ status: 'done', title: '也完成了', id: 't_2' }),
     ];
     const result = deriveKanbanTaskStatus(tasks);
-    expect(result.status).toBe('off');
+    expect(result.status).toBe('completed');
     expect(result.completedCount).toBe(2);
     expect(result.currentTask).toContain('已完成');
   });

@@ -1,3 +1,5 @@
+import { resolveCronJobName as resolveCronJobNameShared } from '@/config/employeeMapping';
+
 /** Active employee entry from shell hooks file. */
 export interface ActiveEmployeeEntry {
   task: string;
@@ -47,15 +49,11 @@ export async function fetchCronJobs(): Promise<CronJob[]> {
 
 /** Map a cron job name to an employee name.
  * Returns null if no match.
+ *
+ * Delegates to shared config (resolveCronJobName).
  */
 export function mapJobNameToEmployee(jobName: string): string | null {
-  if (jobName.includes('老财')) return '老财';
-  if (jobName.includes('铁壳')) return '铁壳';
-  if (jobName.includes('小K') || jobName.includes('早报')) return '小K';
-  if (jobName.includes('404')) return '404';
-  if (jobName.includes('裁判君')) return '裁判君';
-  if (jobName.includes('Ditto') || jobName.includes('ditto')) return 'Ditto';
-  return null;
+  return resolveCronJobNameShared(jobName);
 }
 
 /**

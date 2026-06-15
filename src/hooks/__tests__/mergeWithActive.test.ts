@@ -4,6 +4,18 @@ import { useEmployeeStatus, mergeWithActive } from '../useEmployeeStatus';
 import type { Employee } from '@/types/employee';
 import * as cronJobsApi from '@/api/cronJobs';
 
+vi.mock('@/config/employeeMapping', () => ({
+  EMPLOYEE_META: {
+    '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判'], aliases: ['老财', 'laocai'] },
+    '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['运维护航'], aliases: ['铁壳', 'tieke'] },
+    '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'], aliases: ['小k', 'xiaok'] },
+    '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['开发任务'], aliases: ['404', 'coder-404'] },
+    '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'], aliases: ['裁判', '裁判君', 'reviewer', 'referee'] },
+    'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'], aliases: ['ditto'] },
+  },
+  resolveCronJobName: vi.fn(),
+}));
+
 vi.mock('@/api/cronJobs', () => ({
   fetchCronJobs: vi.fn(),
   mapJobNameToEmployee: vi.fn(),
@@ -14,6 +26,11 @@ vi.mock('@/api/cronJobs', () => ({
 
 vi.mock('@/api/kanban', () => ({
   fetchKanbanTasks: vi.fn().mockResolvedValue([]),
+  fetchKanbanTask: vi.fn(),
+  fetchKanbanStats: vi.fn(),
+  fetchKanbanEmployees: vi.fn(),
+  KanbanWebSocket: vi.fn(),
+  getKanbanWsUrl: vi.fn(),
   groupKanbanTasksByEmployee: vi.fn().mockReturnValue(new Map()),
   deriveKanbanTaskStatus: vi.fn(),
   mapKanbanAssigneeToEmployee: vi.fn(),
@@ -99,8 +116,6 @@ describe('mergeWithActive', () => {
     expect(result[0].role).toBe('开发');
     expect(result[0].avatar).toBe('💻');
   });
-
-  // === Bug fix: respect active.json status field ===
 
   it('does not override status when active entry is completed', () => {
     const employees = [makeEmployee({ name: '老财', status: 'off', currentTask: '休息中' })];

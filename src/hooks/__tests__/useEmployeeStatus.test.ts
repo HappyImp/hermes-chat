@@ -4,6 +4,19 @@ import { useEmployeeStatus, mergeWithActive, mergeWithKanban } from '../useEmplo
 import type { Employee, KanbanTask } from '@/types/employee';
 import * as cronJobsApi from '@/api/cronJobs';
 import * as kanbanApi from '@/api/kanban';
+import * as employeeMapping from '@/config/employeeMapping';
+
+vi.mock('@/config/employeeMapping', () => ({
+  EMPLOYEE_META: {
+    '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判'], aliases: ['老财', 'laocai'] },
+    '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['运维护航'], aliases: ['铁壳', 'tieke'] },
+    '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'], aliases: ['小k', 'xiaok'] },
+    '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['开发任务'], aliases: ['404', 'coder-404'] },
+    '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'], aliases: ['裁判', '裁判君', 'reviewer', 'referee'] },
+    'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'], aliases: ['ditto'] },
+  },
+  resolveCronJobName: vi.fn(),
+}));
 
 vi.mock('@/api/cronJobs', () => ({
   fetchCronJobs: vi.fn(),
@@ -26,9 +39,9 @@ vi.mock('@/api/kanban', () => ({
 }));
 
 const mockFetchCronJobs = vi.mocked(cronJobsApi.fetchCronJobs);
-const mockMapJobNameToEmployee = vi.mocked(cronJobsApi.mapJobNameToEmployee);
 const mockDeriveEmployeeStatus = vi.mocked(cronJobsApi.deriveEmployeeStatus);
 const mockFetchActiveEmployees = vi.mocked(cronJobsApi.fetchActiveEmployees);
+const mockResolveCronJobName = vi.mocked(employeeMapping.resolveCronJobName);
 const mockFetchKanbanTasks = vi.mocked(kanbanApi.fetchKanbanTasks);
 const mockGroupKanbanTasksByEmployee = vi.mocked(kanbanApi.groupKanbanTasksByEmployee);
 const mockDeriveKanbanTaskStatus = vi.mocked(kanbanApi.deriveKanbanTaskStatus);
@@ -49,8 +62,8 @@ const makeKanbanTask = (overrides: Partial<KanbanTask> = {}): KanbanTask => ({
   status: 'todo',
   assignee: 'coder-404',
   priority: '0',
-  createdAt: '2026-06-15T10:00:00Z',
-  updatedAt: '2026-06-15T10:00:00Z',
+  created_at: 1750000000,
+  started_at: 1750000000,
   ...overrides,
 });
 
@@ -312,7 +325,7 @@ describe('useEmployeeStatus', () => {
     }];
 
     mockFetchCronJobs.mockResolvedValue(mockJobs);
-    mockMapJobNameToEmployee.mockImplementation((name: string) => {
+    mockResolveCronJobName.mockImplementation((name: string) => {
       if (name.includes('老财')) return '老财';
       return null;
     });

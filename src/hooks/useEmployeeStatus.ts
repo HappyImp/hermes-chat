@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Employee } from '@/types/employee';
 import {
   fetchCronJobs,
-  mapJobNameToEmployee,
   deriveEmployeeStatus,
   fetchActiveEmployees,
   checkProcessAlive,
@@ -14,20 +13,14 @@ import {
   deriveKanbanTaskStatus,
 } from '@/api/kanban';
 import type { KanbanTask } from '@/types/employee';
+import { EMPLOYEE_META, resolveCronJobName } from '@/config/employeeMapping';
 
 /** Default employee metadata (role, avatar, tasks) for known employees */
-const EMPLOYEE_META: Record<string, { role: string; avatar: string; tasks: string[] }> = {
-  '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'] },
-  '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
-  '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
-  '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['每日日报', '开发任务'] },
-  '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
-  'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
-};
+// EMPLOYEE_META now imported from @/config/employeeMapping
 
 /** Create a default employee object for a given name */
 function createDefaultEmployee(name: string): Employee {
-  const meta = EMPLOYEE_META[name];
+  const meta = EMPLOYEE_META[name as keyof typeof EMPLOYEE_META];
   if (meta) {
     return {
       name,
@@ -51,7 +44,7 @@ function createDefaultEmployee(name: string): Employee {
 function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
   const grouped = new Map<string, CronJob[]>();
   for (const job of jobs) {
-    const employeeName = mapJobNameToEmployee(job.name);
+    const employeeName = resolveCronJobName(job.name);
     if (!employeeName) continue;
     const existing = grouped.get(employeeName) ?? [];
     existing.push(job);
@@ -64,7 +57,7 @@ function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
 function extractEmployeesFromJobs(jobs: CronJob[]): string[] {
   const names = new Set<string>();
   for (const job of jobs) {
-    const name = mapJobNameToEmployee(job.name);
+    const name = resolveCronJobName(job.name);
     if (name) names.add(name);
   }
   return Array.from(names);
@@ -157,6 +150,10 @@ export function mergeWithKanban(
     // Build kanban field updates
     const kanbanFields: Partial<Employee> = {
       taskCount: kanbanTasks.length,
+      kanbanTaskCount: kanbanTasks.length,
+      kanbanRunningCount: kanbanStatus.runningCount,
+      kanbanPendingCount: kanbanStatus.pendingCount,
+      kanbanCompletedCount: kanbanStatus.completedCount,
       kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : 'done',
     };
 

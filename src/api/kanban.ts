@@ -1,11 +1,12 @@
 import type { KanbanTask, KanbanStats, Employee } from '@/types/employee';
 export type { KanbanTask } from '@/types/employee';
+import { resolveAssignee } from '@/config/employeeMapping';
 
 const API_BASE = '/chat/api/kanban';
 
 /** Employee's kanban-derived status summary. */
 export interface EmployeeKanbanStatus {
-  status: 'working' | 'standby' | 'off';
+  status: 'working' | 'standby' | 'off' | 'completed';
   currentTask: string;
   pendingCount: number;
   completedCount: number;
@@ -191,20 +192,11 @@ export function getKanbanWsUrl(): string {
  * Kanban assignees use Hermes profile names (e.g., "coder-404"),
  * while employees use display names (e.g., "404").
  * Returns null if no match.
+ *
+ * Delegates to shared config (resolveAssignee).
  */
 export function mapKanbanAssigneeToEmployee(assignee: string): string | null {
-  if (!assignee) return null;
-
-  const lower = assignee.toLowerCase();
-
-  if (lower.includes('404') || lower === 'coder-404') return '404';
-  if (lower.includes('老财') || lower === 'laocai') return '老财';
-  if (lower.includes('铁壳') || lower === 'tieke') return '铁壳';
-  if (lower.includes('小k') || lower === 'xiaok') return '小K';
-  if (lower.includes('裁判') || lower === 'reviewer' || lower === 'referee') return '裁判君';
-  if (lower.includes('ditto')) return 'Ditto';
-
-  return null;
+  return resolveAssignee(assignee);
 }
 
 /**
@@ -213,7 +205,7 @@ export function mapKanbanAssigneeToEmployee(assignee: string): string | null {
  * Rules (priority order):
  * 1. Any task with status 'doing' → 'working' (show task title)
  * 2. Any task with status 'todo' → 'standby' (has pending work)
- * 3. Only 'done' tasks or no tasks → 'off'
+ * 3. Only 'done' tasks → 'completed'; no tasks → 'completed'
  */
 export function deriveKanbanTaskStatus(tasks: KanbanTask[]): EmployeeKanbanStatus {
   const doing = tasks.filter((t) => t.status === 'doing');
@@ -241,7 +233,7 @@ export function deriveKanbanTaskStatus(tasks: KanbanTask[]): EmployeeKanbanStatu
   }
 
   return {
-    status: 'off',
+    status: 'completed',
     currentTask: done.length > 0 ? `已完成 ${done.length} 项` : '暂无任务',
     pendingCount: 0,
     completedCount: done.length,
