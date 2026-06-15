@@ -34,7 +34,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             deleted_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS messages (
@@ -54,7 +54,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
             allowed INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(user_id, employee),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS token_blacklist (
@@ -127,7 +127,7 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
             tenant_id TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now')),
             UNIQUE(user_id, tenant_id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_user_tenants_user_id ON user_tenants(user_id);
