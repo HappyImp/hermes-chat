@@ -2,7 +2,11 @@ const API_BASE = '/chat/api';
 
 interface AuthResponse {
   token?: string;
-  message?: string;
+  error?: string;
+}
+
+function extractError(data: AuthResponse, fallback: string): string {
+  return data.error || fallback;
 }
 
 export async function login(
@@ -17,7 +21,7 @@ export async function login(
 
   if (!res.ok) {
     const data: AuthResponse = await res.json().catch(() => ({}));
-    throw new Error(data.message || `登录失败 (${res.status})`);
+    throw new Error(extractError(data, `登录失败 (${res.status})`));
   }
 
   const data = await res.json();
@@ -28,16 +32,17 @@ export async function login(
 export async function register(
   username: string,
   password: string,
+  invitationCode?: string,
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, invitation_code: invitationCode }),
   });
 
   if (!res.ok) {
     const data: AuthResponse = await res.json().catch(() => ({}));
-    throw new Error(data.message || `注册失败 (${res.status})`);
+    throw new Error(extractError(data, `注册失败 (${res.status})`));
   }
 }
 
@@ -52,6 +57,6 @@ export async function logout(token: string): Promise<void> {
 
   if (!res.ok) {
     const data: AuthResponse = await res.json().catch(() => ({}));
-    throw new Error(data.message || `登出失败 (${res.status})`);
+    throw new Error(extractError(data, `登出失败 (${res.status})`));
   }
 }

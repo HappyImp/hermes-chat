@@ -30,7 +30,7 @@ describe('auth API', () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 401,
-        json: () => Promise.resolve({ message: '密码错误' }),
+        json: () => Promise.resolve({ error: '密码错误' }),
       });
       await expect(login('alice', 'wrong')).rejects.toThrow('密码错误');
     });
@@ -61,7 +61,7 @@ describe('auth API', () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 409,
-        json: () => Promise.resolve({ message: '用户名已存在' }),
+        json: () => Promise.resolve({ error: '用户名已存在' }),
       });
       await expect(register('alice', 'pass')).rejects.toThrow('用户名已存在');
     });

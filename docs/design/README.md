@@ -5,6 +5,7 @@
 | 文档 | 说明 |
 |------|------|
 | [auth-logout-design](2026-06-14_auth-logout-design.md) | 认证登出功能设计 |
+| [2026-06-15_account-disabled-design.md](2026-06-15_account-disabled-design.md) | 账户禁用功能设计 |
 
 ## 1. 组件拆解
 

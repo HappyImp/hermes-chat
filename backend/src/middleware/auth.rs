@@ -1,11 +1,8 @@
 use axum::{
-    async_trait,
-    extract::FromRequestParts,
-    http::request::Parts,
-    middleware::Next,
+    async_trait, extract::FromRequestParts, http::request::Parts, middleware::Next,
     response::Response,
 };
-use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{AppError, AuthError};
@@ -93,7 +90,11 @@ pub async fn auth_middleware(
     };
 
     // 检查 token 是否在黑名单中（已登出）
-    if state.auth_service.is_token_blacklisted(&state.pool, &token).await? {
+    if state
+        .auth_service
+        .is_token_blacklisted(&state.pool, &token)
+        .await?
+    {
         return Err(AppError::Auth(AuthError::InvalidToken));
     }
 
@@ -105,7 +106,7 @@ pub async fn auth_middleware(
         .unwrap_or(0);
 
     if enabled == 0 {
-        return Err(AppError::Auth(AuthError::InvalidToken));
+        return Err(AppError::Auth(AuthError::AccountDisabled));
     }
 
     req.extensions_mut().insert(AuthUser {

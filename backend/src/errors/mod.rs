@@ -13,6 +13,7 @@ pub enum AppError {
     BadRequest(String),
     Forbidden(String),
     Internal(String),
+    ServiceUnavailable(String),
 }
 
 #[derive(Debug)]
@@ -23,18 +24,35 @@ pub enum AuthError {
     ExpiredToken,
     WrongPassword,
     UserNotFound,
+    AccountDisabled,
     UserExists,
     PasswordHashError,
+    TokenGenerationFailed,
+}
+
+/// 检查 SQLite 错误是否为 UNIQUE 约束冲突
+fn is_unique_constraint_error(e: &sqlx::Error) -> bool {
+    match e {
+        sqlx::Error::Database(db_err) => {
+            // SQLite UNIQUE constraint 错误码为 19 (SQLITE_CONSTRAINT)
+            db_err.code().is_some_and(|code| code == "2067")
+                || db_err.message().contains("UNIQUE constraint failed")
+        }
+        _ => false,
+    }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             AppError::Database(e) => {
-                // 内部日志：记录完整错误上下文
                 tracing::error!("数据库错误: {}", e);
-                // 用户可见：通用消息，不暴露内部细节
-                (StatusCode::INTERNAL_SERVER_ERROR, "数据库错误".to_string())
+                let msg = if is_unique_constraint_error(&e) {
+                    "数据已存在，不能重复创建"
+                } else {
+                    "数据库错误"
+                };
+                (StatusCode::INTERNAL_SERVER_ERROR, msg.to_string())
             }
             AppError::Auth(e) => match e {
                 AuthError::MissingToken => (StatusCode::UNAUTHORIZED, "缺少认证令牌".to_string()),
@@ -42,24 +60,45 @@ impl IntoResponse for AppError {
                 AuthError::ExpiredToken => (StatusCode::UNAUTHORIZED, "令牌已过期".to_string()),
                 AuthError::WrongPassword => (StatusCode::UNAUTHORIZED, "密码错误".to_string()),
                 AuthError::UserNotFound => (StatusCode::UNAUTHORIZED, "用户不存在".to_string()),
+                AuthError::AccountDisabled => (
+                    StatusCode::FORBIDDEN,
+                    "账户已被禁用，请联系管理员".to_string(),
+                ),
                 AuthError::UserExists => (StatusCode::CONFLICT, "用户名已存在".to_string()),
                 AuthError::PasswordHashError => {
-                    // 密码哈希失败属于服务端异常，需记录日志
                     tracing::error!("密码哈希处理失败");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "密码处理错误".to_string())
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "密码处理错误".to_string(),
+                    )
+                }
+                AuthError::TokenGenerationFailed => {
+                    tracing::error!("JWT Token 生成失败");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "认证服务异常".to_string(),
+                    )
                 }
             },
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::Forbidden(msg) => {
-                // 禁止访问记录 warn 级别日志（可能是权限配置问题或异常访问）
                 tracing::warn!("访问被拒绝: {}", msg);
-                (StatusCode::FORBIDDEN, msg)
+                (StatusCode::FORBIDDEN, "访问被拒绝".to_string())
+            }
+            AppError::ServiceUnavailable(detail) => {
+                tracing::error!("上游服务不可用: {}", detail);
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "AI服务暂时不可用".to_string(),
+                )
             }
             AppError::Internal(msg) => {
-                // 内部错误：日志记录完整信息，用户只看到通用消息
                 tracing::error!("内部错误: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "内部服务器错误".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "内部服务器错误".to_string(),
+                )
             }
         };
 

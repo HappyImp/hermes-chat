@@ -10,3 +10,4 @@
 | [2026-06-14_employee-async-task.md](2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
 | [2026-06-14_auth-login-register.md](2026-06-14_auth-login-register.md) | 2026-06-14 | 登录/注册功能 PRD |
 | [2026-06-14_auth-logout.md](2026-06-14_auth-logout.md) | 2026-06-14 | 登出功能 (Token 黑名单) PRD |
+| [2026-06-15_account-disabled.md](2026-06-15_account-disabled.md) | 2026-06-15 | 账户禁用功能 PRD |
