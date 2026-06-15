@@ -17,6 +17,8 @@ type EmployeeCache = Arc<RwLock<Option<(Instant, Vec<EmployeeInfo>)>>>;
 #[derive(Clone)]
 pub struct KanbanService {
     employee_cache: EmployeeCache,
+    #[allow(dead_code)]
+    kanban_pool: Option<DbPool>,
 }
 
 impl Default for KanbanService {
@@ -29,6 +31,14 @@ impl KanbanService {
     pub fn new() -> Self {
         Self {
             employee_cache: Arc::new(RwLock::new(None)),
+            kanban_pool: None,
+        }
+    }
+
+    pub fn with_kanban_pool(pool: DbPool) -> Self {
+        Self {
+            employee_cache: Arc::new(RwLock::new(None)),
+            kanban_pool: Some(pool),
         }
     }
 
@@ -37,6 +47,51 @@ impl KanbanService {
     pub async fn list_tasks(&self, _tenant_id: &str) -> Result<Vec<KanbanTask>, AppError> {
         // TODO: 对接 hermes kanban list --tenant <tenant_id> --json
         Ok(vec![])
+    }
+
+    /// 🔴1: 从 CLI 获取任务列表 JSON（供 WS 事件轮询使用）
+    ///
+    /// 执行 `hermes kanban list --json --tenant <tenant_id>`，返回原始 JSON 数组。
+    /// 失败时返回空数组（降级），不中断 WS 连接。
+    pub async fn list_tasks_json(&self, tenant_id: &str) -> Result<Vec<Value>, AppError> {
+        let tenant_id = tenant_id.to_string();
+
+        let result = tokio::task::spawn_blocking(move || {
+            let output = std::process::Command::new(HERMES_BIN)
+                .args(["kanban", "list", "--json", "--tenant", &tenant_id])
+                .output();
+
+            match output {
+                Ok(o) if o.status.success() => {
+                    let stdout = String::from_utf8_lossy(&o.stdout);
+                    match serde_json::from_str::<Value>(&stdout) {
+                        Ok(Value::Array(arr)) => Ok(arr),
+                        Ok(_) => Ok(vec![]),
+                        Err(e) => {
+                            // 🔴4: 原始错误记日志，返回通用错误
+                            tracing::error!("kanban list JSON 解析失败: {}", e);
+                            Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                        }
+                    }
+                }
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    tracing::error!("kanban list CLI 执行失败: {}", stderr);
+                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                }
+                Err(e) => {
+                    tracing::error!("kanban list CLI 启动失败: {}", e);
+                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                }
+            }
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!("kanban list spawn_blocking 失败: {}", e);
+            AppError::Internal("服务暂时不可用，请稍后重试".to_string())
+        })?;
+
+        result
     }
 
     /// 查询单个任务详情（必须传 tenant_id 做隔离）
@@ -54,7 +109,11 @@ impl KanbanService {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     match serde_json::from_str::<Value>(&stdout) {
                         Ok(v) => Ok(v),
-                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                        Err(e) => {
+                            // 🔴4: 原始错误记日志
+                            tracing::error!("kanban show JSON 解析失败: {}", e);
+                            Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                        }
                     }
                 }
                 Ok(o) => {
@@ -64,24 +123,27 @@ impl KanbanService {
                         || stderr.contains("不存在")
                         || o.status.code() == Some(1)
                     {
-                        Err("NOT_FOUND".to_string())
+                        Err(AppError::NotFound("任务不存在".to_string()))
                     } else {
-                        Err(format!("CLI 执行失败: {}", stderr))
+                        // 🔴4: 原始错误记日志，返回通用消息
+                        tracing::error!("kanban show CLI 执行失败: {}", stderr);
+                        Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
                     }
                 }
-                Err(e) => Err(format!("CLI 执行失败: {}", e)),
+                Err(e) => {
+                    // 🔴4: 原始错误记日志
+                    tracing::error!("kanban show CLI 启动失败: {}", e);
+                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                }
             }
         })
         .await
-        .map_err(|e| AppError::Internal(format!("spawn_blocking 失败: {}", e)))?;
-
-        let data = result.map_err(|e| {
-            if e == "NOT_FOUND" {
-                AppError::NotFound("任务不存在".to_string())
-            } else {
-                AppError::Internal(e)
-            }
+        .map_err(|e| {
+            tracing::error!("kanban show spawn_blocking 失败: {}", e);
+            AppError::Internal("服务暂时不可用，请稍后重试".to_string())
         })?;
+
+        let data = result?;
 
         // 验证 tenant 隔离：task.tenant 存在时必须匹配
         if let Some(task_tenant) = data.get("task").and_then(|t| t.get("tenant")) {
@@ -100,10 +162,13 @@ impl KanbanService {
     }
 
     /// 查询看板统计（必须传 tenant_id 做隔离）
-    pub async fn get_stats(&self, _tenant_id: &str) -> Result<Value, AppError> {
-        let result = tokio::task::spawn_blocking(|| {
+    /// 🟡5: 传递 --tenant 参数给 CLI
+    pub async fn get_stats(&self, tenant_id: &str) -> Result<Value, AppError> {
+        let tenant_id = tenant_id.to_string();
+
+        let result = tokio::task::spawn_blocking(move || {
             let output = std::process::Command::new(HERMES_BIN)
-                .args(["kanban", "stats", "--json"])
+                .args(["kanban", "stats", "--json", "--tenant", &tenant_id])
                 .output();
 
             match output {
@@ -111,20 +176,31 @@ impl KanbanService {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     match serde_json::from_str::<Value>(&stdout) {
                         Ok(v) => Ok(v),
-                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                        Err(e) => {
+                            // 🔴4: 原始错误记日志
+                            tracing::error!("kanban stats JSON 解析失败: {}", e);
+                            Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                        }
                     }
                 }
-                Ok(o) => Err(format!(
-                    "CLI 执行失败: {}",
-                    String::from_utf8_lossy(&o.stderr)
-                )),
-                Err(e) => Err(format!("CLI 执行失败: {}", e)),
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    tracing::error!("kanban stats CLI 执行失败: {}", stderr);
+                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                }
+                Err(e) => {
+                    tracing::error!("kanban stats CLI 启动失败: {}", e);
+                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                }
             }
         })
         .await
-        .map_err(|e| AppError::Internal(format!("spawn_blocking 失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("kanban stats spawn_blocking 失败: {}", e);
+            AppError::Internal("服务暂时不可用，请稍后重试".to_string())
+        })?;
 
-        result.map_err(AppError::Internal)
+        result
     }
 
     // ==================== KAN-205: 员工列表 ====================

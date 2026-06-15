@@ -16,10 +16,10 @@
 ### Phase 2：后端适配层（2-3天）
 - [ ] KAN-201：新增 kanban handler 模块
 - [ ] KAN-202：实现任务列表接口 GET /api/kanban/tasks
-- [ ] KAN-203：实现任务详情接口 GET /api/kanban/tasks/:id
-- [ ] KAN-204：实现看板统计接口 GET /api/kanban/stats
-- [ ] KAN-205：实现员工列表接口 GET /api/kanban/employees
-- [ ] KAN-206：实现 WebSocket 事件代理 WS /api/kanban/events
+- [~] KAN-203：实现任务详情接口 GET /api/kanban/tasks/:id — 🔴 审查打回，见 backlog/2026-06-15_phase2-p1-review.md
+- [~] KAN-204：实现看板统计接口 GET /api/kanban/stats — 🟡 审查通过（有建议）
+- [~] KAN-205：实现员工列表接口 GET /api/kanban/employees
+- [~] KAN-206：实现 WebSocket 事件代理 WS /api/kanban/events — 🔴 审查打回，见 backlog/2026-06-15_phase2-p1-review.md
 - [ ] KAN-207：扩展权限模型（tenant 映射）
 - [ ] KAN-208：实现 tenant 权限过滤
 

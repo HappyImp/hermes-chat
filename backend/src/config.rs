@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
     pub hermes: HermesConfig,
+    pub kanban: KanbanConfig,
     #[allow(dead_code)]
     pub rate_limit: RateLimitConfig,
     pub security: SecurityConfig,
@@ -36,6 +37,12 @@ pub struct HermesConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct KanbanConfig {
+    /// kanban SQLite 数据库路径
+    pub db_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct RateLimitConfig {
     #[allow(dead_code)]
     pub max_requests_per_minute: usize,
@@ -60,5 +67,16 @@ impl AppConfig {
 
     pub fn bind_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
+    }
+
+    /// 解析 kanban 数据库路径（展开 ~ 为 home 目录）
+    pub fn kanban_db_url(&self) -> String {
+        let path = if self.kanban.db_path.starts_with("~/") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            format!("{}{}", home, &self.kanban.db_path[1..])
+        } else {
+            self.kanban.db_path.clone()
+        };
+        format!("sqlite:{}?mode=ro", path)
     }
 }

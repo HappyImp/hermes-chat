@@ -85,3 +85,4 @@
 || [backlog/2026-06-15_bug-fixes.md](backlog/2026-06-15_bug-fixes.md) | 2026-06-15 | 两个前端 bug 修复（员工列表刷新 + 发送按钮置灰） |
 | [backlog/2026-06-15_kanban-backend-review.md](backlog/2026-06-15_kanban-backend-review.md) | 2026-06-15 | Kanban 后端适配层审查（3🔴+3🟡+2🟢） |
 | [backlog/2026-06-15_phase2-p0-review.md](backlog/2026-06-15_phase2-p0-review.md) | 2026-06-15 | Phase 2 P0 审查 — KAN-205/207/208（1🔴+3🟡+3🟢） |
+| [backlog/2026-06-15_phase2-p1-review.md](backlog/2026-06-15_phase2-p1-review.md) | 2026-06-15 | Phase 2 P1 审查 — KAN-203/204/206（4🔴+4🟡+3🟢） |

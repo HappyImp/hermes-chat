@@ -8,7 +8,7 @@ pub struct UserTenant {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct KanbanTask {
     pub id: String,
     pub title: String,

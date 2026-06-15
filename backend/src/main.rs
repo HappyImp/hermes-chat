@@ -54,17 +54,37 @@ async fn main() {
 
     tracing::info!("数据库初始化完成");
 
+    // 初始化 kanban 数据库连接（只读）
+    let kanban_db_url = config.kanban_db_url();
+    tracing::info!("连接 kanban 数据库: {}", kanban_db_url);
+
+    let kanban_pool = match db::pool::create_pool(&kanban_db_url, 5).await {
+        Ok(p) => {
+            tracing::info!("kanban 数据库连接成功");
+            Some(p)
+        }
+        Err(e) => {
+            tracing::warn!("kanban 数据库连接失败（降级为空数据）: {}", e);
+            None
+        }
+    };
+
     // 初始化服务
     let auth_service = AuthService::new(config.jwt.secret.clone(), config.jwt.expires_in_hours);
 
     let hermes_client = HermesClient::new(config.hermes.gateway_url.clone());
+
+    let kanban_service = match kanban_pool {
+        Some(p) => KanbanService::with_kanban_pool(p),
+        None => KanbanService::new(),
+    };
 
     let state = AppState {
         pool,
         auth_service,
         employee_service: EmployeeService::new(),
         hermes_client,
-        kanban_service: KanbanService::new(),
+        kanban_service,
         profile_service: ProfileService::new(None),
         jwt_secret: config.jwt.secret.clone(),
     };
@@ -123,14 +143,15 @@ async fn main() {
         .route("/users/:id", delete(handlers::admin::delete_user))
         .route("/audit-logs", get(handlers::admin::get_audit_logs));
 
-    // KAN-208: kanban 路由加上 tenant_middleware
+    // KAN-208: kanban REST 路由（需 auth + tenant middleware）
     let kanban_routes = Router::new()
         .route("/tasks", get(handlers::kanban::list_tasks))
         .route("/tasks/:id", get(handlers::kanban::get_task))
         .route("/stats", get(handlers::kanban::get_stats))
         .route("/employees", get(handlers::kanban::get_employees));
 
-    // KAN-206: WebSocket 事件代理 — 自带 JWT 验证（从 query param），不走 auth_middleware
+    // 🔴2: WS 路由不走 middleware（WebSocket 无法设自定义 header，
+    //      ws_events 自己从 query param 手动验证 JWT + 黑名单）
     let kanban_ws_routes = Router::new().route("/events", get(handlers::kanban::ws_events));
 
     let cleanup_pool = state.pool.clone();
@@ -191,9 +212,10 @@ async fn main() {
                 .route_layer(axum_middleware::from_fn_with_state(
                     state.clone(),
                     auth_middleware,
-                )),
+                ))
+                // 🔴2: WS 路由合并但不挂 middleware（ws_events 自行验证）
+                .merge(kanban_ws_routes),
         )
-        .nest("/api/kanban", kanban_ws_routes)
         .fallback(not_found_handler)
         .layer(cors_layer(&config.security.allowed_origins))
         .layer(TraceLayer::new_for_http())

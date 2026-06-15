@@ -1,24 +1,25 @@
-use axum::extract::ws::{Message, WebSocket};
+use std::collections::HashMap;
+
 use axum::{
-    extract::{Query, State},
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::State,
     response::IntoResponse,
     Json,
 };
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use tokio::time::{interval, Duration};
 
-use crate::errors::AppError;
-use crate::middleware::auth::{AuthUser, Claims};
-use crate::middleware::tenant::TenantScope;
+use crate::errors::{AppError, AuthError};
+use crate::middleware::auth::Claims;
 use crate::AppState;
 
 /// GET /api/kanban/tasks — 返回任务列表 JSON
 pub async fn list_tasks(
     State(state): State<AppState>,
-    _auth: AuthUser,
-    tenant: TenantScope,
+    _auth: crate::middleware::auth::AuthUser,
+    tenant: crate::middleware::tenant::TenantScope,
 ) -> Result<Json<Value>, AppError> {
     let tasks = state.kanban_service.list_tasks(tenant.as_str()).await?;
 
@@ -28,8 +29,8 @@ pub async fn list_tasks(
 /// GET /api/kanban/tasks/:id — 返回任务详情 JSON
 pub async fn get_task(
     State(state): State<AppState>,
-    _auth: AuthUser,
-    tenant: TenantScope,
+    _auth: crate::middleware::auth::AuthUser,
+    tenant: crate::middleware::tenant::TenantScope,
     axum::extract::Path(task_id): axum::extract::Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let task = state
@@ -37,25 +38,25 @@ pub async fn get_task(
         .get_task(&task_id, tenant.as_str())
         .await?;
 
-    Ok(Json(json!({ "task": task })))
+    Ok(Json(task))
 }
 
 /// GET /api/kanban/stats — 返回看板统计 JSON
 pub async fn get_stats(
     State(state): State<AppState>,
-    _auth: AuthUser,
-    tenant: TenantScope,
+    _auth: crate::middleware::auth::AuthUser,
+    tenant: crate::middleware::tenant::TenantScope,
 ) -> Result<Json<Value>, AppError> {
     let stats = state.kanban_service.get_stats(tenant.as_str()).await?;
 
-    Ok(Json(stats))
+    Ok(Json(json!({ "stats": stats })))
 }
 
 /// GET /api/kanban/employees — 返回员工列表 JSON
 pub async fn get_employees(
     State(state): State<AppState>,
-    _auth: AuthUser,
-    tenant: TenantScope,
+    _auth: crate::middleware::auth::AuthUser,
+    tenant: crate::middleware::tenant::TenantScope,
 ) -> Result<Json<Value>, AppError> {
     let employees = state
         .kanban_service
@@ -65,174 +66,148 @@ pub async fn get_employees(
     Ok(Json(json!({ "employees": employees })))
 }
 
-// ==================== KAN-206: WebSocket 事件代理 ====================
+// ==================== 🔴2: WS 认证 query 参数 ====================
 
-const HERMES_BIN: &str = "/opt/hermes/.venv/bin/hermes";
-const WS_POLL_INTERVAL_SECS: u64 = 5;
-
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct WsQuery {
     pub token: String,
     pub tenant: Option<String>,
 }
 
-/// GET /api/kanban/events?token=<jwt>&tenant=<tenant_id>
+/// WS /api/kanban/events — WebSocket 事件代理
 ///
-/// WebSocket 事件代理：认证后每 5 秒轮询任务列表，检测状态变化推送客户端。
-/// 因为浏览器 WebSocket API 无法设置 Authorization header，
-/// 所以从 query param 获取 token 并手动验证。
+/// 通过 query params 认证（WebSocket 无法设置自定义 header）：
+/// - token: JWT 令牌（必填）
+/// - tenant: tenant ID（可选，未指定从 user_tenants 推导）
+///
+/// 🔴2: 手动验证 JWT，不走 auth_middleware
+/// 🔴3: 验证后检查 token 黑名单
+/// 🔴1: 每 5 秒 CLI poll，维护 HashMap 快照检测变更
 pub async fn ws_events(
+    ws: WebSocketUpgrade,
     State(state): State<AppState>,
-    Query(query): Query<WsQuery>,
-    ws: axum::extract::WebSocketUpgrade,
-) -> impl IntoResponse {
-    // 验证 JWT
-    let claims = match decode::<Claims>(
+    axum::extract::Query(query): axum::extract::Query<WsQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    // 🔴2: 手动验证 JWT
+    let claims = decode::<Claims>(
         &query.token,
         &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
         &Validation::new(Algorithm::HS256),
-    ) {
-        Ok(token_data) => token_data.claims,
-        Err(_) => {
-            return Err(AppError::from(crate::errors::AuthError::InvalidToken));
-        }
-    };
+    )
+    .map_err(|_| AppError::Auth(AuthError::InvalidToken))?
+    .claims;
 
-    // 检查 token 是否在黑名单中
+    // 🔴3: 检查 token 黑名单
     if state
         .auth_service
         .is_token_blacklisted(&state.pool, &query.token)
         .await?
     {
-        return Err(AppError::from(crate::errors::AuthError::InvalidToken));
+        return Err(AppError::Auth(AuthError::InvalidToken));
     }
 
-    // 解析 tenant_id
-    let tenant_id = if let Some(ref t) = query.tenant {
-        if !crate::middleware::tenant::is_valid_tenant_id(t) {
-            return Err(AppError::BadRequest("无效的 tenant ID".to_string()));
-        }
-        // 验证用户有权访问该 tenant
-        if !crate::services::kanban::KanbanService::check_tenant_access(&state.pool, &claims.sub, t)
+    // 确定 tenant
+    let tenant_id = match query.tenant {
+        Some(t) => {
+            if !crate::middleware::tenant::is_valid_tenant_id(&t) {
+                return Err(AppError::BadRequest("无效的 tenant ID".to_string()));
+            }
+            if !crate::services::kanban::KanbanService::check_tenant_access(
+                &state.pool,
+                &claims.sub,
+                &t,
+            )
             .await?
-        {
-            return Err(AppError::Forbidden(format!("无权访问 tenant: {}", t)));
+            {
+                return Err(AppError::Forbidden("无权访问该 tenant".to_string()));
+            }
+            t
         }
-        t.clone()
-    } else {
-        crate::services::kanban::KanbanService::get_tenant_for_user(&state.pool, &claims.sub)
-            .await?
+        None => {
+            crate::services::kanban::KanbanService::get_tenant_for_user(&state.pool, &claims.sub)
+                .await?
+        }
     };
 
-    Ok(ws.on_upgrade(move |socket| handle_ws_connection(socket, state, tenant_id)))
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, tenant_id)))
 }
 
-/// WebSocket 连接处理：轮询任务列表，检测变化推送
-async fn handle_ws_connection(mut socket: WebSocket, _state: AppState, tenant_id: String) {
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(WS_POLL_INTERVAL_SECS));
-    // 上一次快照：task_id -> status
-    let mut prev_snapshot: HashMap<String, String> = HashMap::new();
+/// 🔴1: WebSocket 连接处理 — CLI poll + HashMap 快照
+///
+/// 每 5 秒执行 `hermes kanban list --json --tenant <tenant_id>`
+/// 对比快照检测 task_changed / task_created 事件
+async fn handle_ws(mut socket: WebSocket, state: AppState, tenant_id: String) {
+    tracing::info!("WebSocket 连接建立, tenant: {}", tenant_id);
+
+    let mut poll_interval = interval(Duration::from_secs(5));
+    // 快照：task_id → status，用于检测变更
+    let mut snapshot: HashMap<String, String> = HashMap::new();
 
     loop {
         tokio::select! {
-            // 检查客户端是否断开
-            msg = socket.recv() => {
-                match msg {
-                    Some(Ok(Message::Close(_))) | None => {
-                        tracing::debug!("WebSocket 客户端断开");
-                        break;
-                    }
-                    _ => {} // 忽略客户端发来的其他消息
-                }
-            }
-            // 定时轮询
-            _ = interval.tick() => {
-                let tasks_json = match tokio::task::spawn_blocking({
-                    let bin = HERMES_BIN.to_string();
-                    let tid = tenant_id.clone();
-                    move || {
-                        std::process::Command::new(&bin)
-                            .args(["kanban", "list", "--json", "--tenant", &tid])
-                            .output()
-                    }
-                }).await {
-                    Ok(Ok(o)) if o.status.success() => {
-                        String::from_utf8_lossy(&o.stdout).to_string()
-                    }
-                    Ok(Ok(o)) => {
-                        tracing::warn!("kanban list 失败: {}", String::from_utf8_lossy(&o.stderr));
-                        continue;
-                    }
-                    Ok(Err(e)) => {
-                        tracing::warn!("kanban list 执行失败: {}", e);
-                        continue;
-                    }
-                    Err(e) => {
-                        tracing::warn!("spawn_blocking 失败: {}", e);
-                        continue;
-                    }
-                };
+            // 每 5 秒轮询 CLI
+            _ = poll_interval.tick() => {
+                match state.kanban_service.list_tasks_json(&tenant_id).await {
+                    Ok(tasks) => {
+                        for task in &tasks {
+                            let task_id = match task.get("id").and_then(|v| v.as_str()) {
+                                Some(id) if !id.is_empty() => id.to_string(),
+                                _ => continue,
+                            };
+                            let status = task
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
 
-                // 解析任务列表
-                let tasks: Vec<Value> = match serde_json::from_str::<Value>(&tasks_json) {
-                    Ok(v) => {
-                        if let Some(arr) = v.as_array() {
-                            arr.clone()
-                        } else if let Some(arr) = v.get("tasks").and_then(|t| t.as_array()) {
-                            arr.clone()
-                        } else {
-                            vec![]
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("kanban list JSON 解析失败: {}", e);
-                        continue;
-                    }
-                };
+                            let event = if let Some(old_status) = snapshot.get(&task_id) {
+                                if *old_status != status {
+                                    Some(json!({
+                                        "type": "task_changed",
+                                        "task_id": task_id,
+                                        "old_status": old_status,
+                                        "new_status": status,
+                                        "task": task,
+                                    }))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                Some(json!({
+                                    "type": "task_created",
+                                    "task_id": task_id,
+                                    "task": task,
+                                }))
+                            };
 
-                // 构建当前快照
-                let mut curr_snapshot: HashMap<String, String> = HashMap::new();
-                for task in &tasks {
-                    if let (Some(id), Some(status)) = (
-                        task.get("id").and_then(|v| v.as_str()),
-                        task.get("status").and_then(|v| v.as_str()),
-                    ) {
-                        curr_snapshot.insert(id.to_string(), status.to_string());
-                    }
-                }
+                            snapshot.insert(task_id, status);
 
-                // 检测变化
-                for (task_id, new_status) in &curr_snapshot {
-                    if let Some(old_status) = prev_snapshot.get(task_id) {
-                        if old_status != new_status {
-                            let event = json!({
-                                "event": "task_changed",
-                                "task_id": task_id,
-                                "old_status": old_status,
-                                "new_status": new_status,
-                            });
-                            if socket.send(Message::Text(event.to_string())).await.is_err() {
-                                return; // 客户端已断开
+                            if let Some(evt) = event {
+                                let payload = serde_json::to_string(&evt).unwrap_or_default();
+                                if socket.send(Message::Text(payload)).await.is_err() {
+                                    tracing::info!("WebSocket 发送失败，客户端断开");
+                                    return;
+                                }
                             }
                         }
                     }
-                }
-
-                // 检测新增任务
-                for (task_id, status) in &curr_snapshot {
-                    if !prev_snapshot.contains_key(task_id) {
-                        let event = json!({
-                            "event": "task_created",
-                            "task_id": task_id,
-                            "status": status,
-                        });
-                        if socket.send(Message::Text(event.to_string())).await.is_err() {
-                            return;
-                        }
+                    Err(e) => {
+                        tracing::warn!("轮询 kanban 任务失败: {:?}", e);
                     }
                 }
-
-                prev_snapshot = curr_snapshot;
+            }
+            // 接收客户端消息（心跳或关闭）
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Close(_))) | None => {
+                        tracing::info!("WebSocket 连接关闭, tenant: {}", tenant_id);
+                        return;
+                    }
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    _ => {}
+                }
             }
         }
     }

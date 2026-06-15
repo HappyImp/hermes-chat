@@ -13,6 +13,10 @@ expires_in_hours = 24
 [hermes]
 gateway_url = "http://127.0.0.1:8642"
 
+[kanban]
+# kanban SQLite 数据库路径（相对于工作目录）
+db_path = "~/.hermes/kanban/boards/hermes-chat/kanban.db"
+
 [rate_limit]
 max_requests_per_minute = 10
 
