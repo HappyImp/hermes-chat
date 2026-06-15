@@ -42,15 +42,13 @@ async fn create_test_user(pool: &SqlitePool, username: &str) -> String {
 /// 给用户分配 tenant
 async fn assign_tenant(pool: &SqlitePool, user_id: &str, tenant_id: &str) {
     let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query(
-        "INSERT INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, ?)",
-    )
-    .bind(&id)
-    .bind(user_id)
-    .bind(tenant_id)
-    .execute(pool)
-    .await
-    .expect("分配 tenant 失败");
+    sqlx::query("INSERT INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, ?)")
+        .bind(&id)
+        .bind(user_id)
+        .bind(tenant_id)
+        .execute(pool)
+        .await
+        .expect("分配 tenant 失败");
 }
 
 // ==================== get_tenant_for_user 测试 ====================
@@ -133,10 +131,19 @@ async fn test_get_stats_stub_returns_zero_stats() {
 }
 
 #[tokio::test]
-async fn test_get_employees_stub_returns_empty() {
+async fn test_get_employees_returns_profiles() {
     let svc = KanbanService::new();
     let employees = svc.get_employees("any-tenant").await.unwrap();
-    assert!(employees.is_empty(), "stub 应返回空列表");
+    // 已对接 hermes CLI，应返回 profile 列表（至少有 coder-404 等）
+    // 不再是空列表
+    for emp in &employees {
+        assert!(!emp.name.is_empty(), "员工 name 不应为空");
+        assert!(
+            emp.status == "working" || emp.status == "standby",
+            "状态应为 working 或 standby，实际: {}",
+            emp.status
+        );
+    }
 }
 
 // ==================== Default / new 测试 ====================
@@ -203,4 +210,60 @@ async fn test_tenant_isolation_same_tenant_shared() {
 
     assert_eq!(tenant_a, tenant_b, "同 tenant 的用户应返回相同 tenant_id");
     assert_eq!(tenant_a, "shared-board");
+}
+
+// ==================== KAN-207: get_user_tenants / check_tenant_access ====================
+
+#[tokio::test]
+async fn test_get_user_tenants_returns_mapped_tenants() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "tenant_list_user").await;
+    assign_tenant(&pool, &user_id, "board-x").await;
+    assign_tenant(&pool, &user_id, "board-y").await;
+
+    let tenants = KanbanService::get_user_tenants(&pool, &user_id)
+        .await
+        .unwrap();
+
+    assert_eq!(tenants.len(), 2, "应返回 2 个 tenant");
+    let ids: Vec<&str> = tenants.iter().map(|t| t.tenant_id.as_str()).collect();
+    assert!(ids.contains(&"board-x"), "应包含 board-x");
+    assert!(ids.contains(&"board-y"), "应包含 board-y");
+}
+
+#[tokio::test]
+async fn test_get_user_tenants_empty_for_no_mapping() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "no_tenants_user").await;
+
+    let tenants = KanbanService::get_user_tenants(&pool, &user_id)
+        .await
+        .unwrap();
+
+    assert!(tenants.is_empty(), "无映射应返回空列表");
+}
+
+#[tokio::test]
+async fn test_check_tenant_access_allowed() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "access_user").await;
+    assign_tenant(&pool, &user_id, "my-board").await;
+
+    let has_access = KanbanService::check_tenant_access(&pool, &user_id, "my-board")
+        .await
+        .unwrap();
+
+    assert!(has_access, "已映射的 tenant 应有访问权限");
+}
+
+#[tokio::test]
+async fn test_check_tenant_access_denied() {
+    let pool = setup_db().await;
+    let user_id = create_test_user(&pool, "denied_user").await;
+
+    let has_access = KanbanService::check_tenant_access(&pool, &user_id, "no-such-board")
+        .await
+        .unwrap();
+
+    assert!(!has_access, "未映射的 tenant 应无访问权限");
 }

@@ -104,7 +104,7 @@ impl AuthService {
         for emp in &employees {
             let perm_id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)",
+                "INSERT INTO permissions (id, user_id, employee, tenant, allowed) VALUES (?, ?, ?, 'default', 1)",
             )
             .bind(&perm_id)
             .bind(&id)
@@ -112,6 +112,15 @@ impl AuthService {
             .execute(&mut *tx)
             .await?;
         }
+
+        // 同步 user_tenants 映射
+        sqlx::query(
+            "INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, 'default')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
 
         // 更新授权码状态
         let new_status = if code_row.used_count + 1 >= code_row.max_uses {

@@ -37,3 +37,14 @@ pub struct KanbanEvent {
     pub task_id: String,
     pub data: serde_json::Value,
 }
+
+/// 员工信息（从 hermes profile + kanban assignees 推导）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmployeeInfo {
+    /// profile 名称
+    pub name: String,
+    /// 角色描述（来自 profile describe）
+    pub role: String,
+    /// 状态：working / standby / off
+    pub status: String,
+}

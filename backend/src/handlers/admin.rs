@@ -39,6 +39,13 @@ pub struct ToggleStatusRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdatePermissionsRequest {
     pub allowed_employees: Vec<String>,
+    /// 可选的 tenant ID，默认 "default"
+    #[serde(default = "default_tenant")]
+    pub tenant: String,
+}
+
+fn default_tenant() -> String {
+    "default".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,7 +166,13 @@ pub async fn update_user_permissions(
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
     admin_svc
-        .update_user_permissions(&state.pool, &admin.user_id, &id, input.allowed_employees)
+        .update_user_permissions_for_tenant(
+            &state.pool,
+            &admin.user_id,
+            &id,
+            input.allowed_employees,
+            &input.tenant,
+        )
         .await?;
     Ok(Json(json!({ "message": "权限已更新" })))
 }

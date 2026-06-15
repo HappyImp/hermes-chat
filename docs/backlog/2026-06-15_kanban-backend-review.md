@@ -63,7 +63,7 @@ let stats = state.kanban_service.get_stats(&tenant_id).await?;
 - 测试 tenant 隔离（不同用户看不到彼此任务）
 
 **优先级**: P0 — 核心逻辑无测试
-**修复记录**: ✅ 已修复（添加 tests/kanban_tests.rs，14 个测试用例）
+**修复记录**: ✅ 已修复（添加 tests/kanban_tests.rs，12 个测试用例）
 
 ---
 

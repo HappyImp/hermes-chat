@@ -138,6 +138,13 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
     .await?;
 
     // 迁移现有权限数据到 user_tenants
+    // KAN-207: permissions 表加 tenant 列（兼容旧数据库）
+    let _ =
+        sqlx::query("ALTER TABLE permissions ADD COLUMN tenant TEXT NOT NULL DEFAULT 'default'")
+            .execute(pool)
+            .await;
+
+    // 迁移现有权限数据到 user_tenants
     sqlx::query(
         "INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id)
          SELECT lower(hex(randomblob(16))), user_id, 'default'

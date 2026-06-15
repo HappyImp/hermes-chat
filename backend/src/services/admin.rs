@@ -10,6 +10,12 @@ use crate::models::invitation_code::{
 #[derive(Clone)]
 pub struct AdminService;
 
+impl Default for AdminService {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl AdminService {
     pub fn new() -> Self {
         Self
@@ -353,12 +359,15 @@ impl AdminService {
                 .fetch_optional(pool)
                 .await?;
 
-        let employees: Vec<String> = sqlx::query_scalar(
-            "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1",
+        let employees: Vec<serde_json::Value> = sqlx::query_as::<_, (String, String)>(
+            "SELECT employee, tenant FROM permissions WHERE user_id = ? AND allowed = 1",
         )
         .bind(user_id)
         .fetch_all(pool)
-        .await?;
+        .await?
+        .into_iter()
+        .map(|(emp, tenant)| serde_json::json!({ "name": emp, "tenant": tenant }))
+        .collect();
 
         let session_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND deleted_at IS NULL",
@@ -387,7 +396,7 @@ impl AdminService {
         }))
     }
 
-    /// 修改用户权限
+    /// 修改用户权限（默认 tenant，向后兼容）
     pub async fn update_user_permissions(
         &self,
         pool: &DbPool,
@@ -395,9 +404,23 @@ impl AdminService {
         user_id: &str,
         employees: Vec<String>,
     ) -> Result<(), AppError> {
-        // 删除旧权限
-        sqlx::query("DELETE FROM permissions WHERE user_id = ?")
+        self.update_user_permissions_for_tenant(pool, operator_id, user_id, employees, "default")
+            .await
+    }
+
+    /// 修改用户权限（指定 tenant）
+    pub async fn update_user_permissions_for_tenant(
+        &self,
+        pool: &DbPool,
+        operator_id: &str,
+        user_id: &str,
+        employees: Vec<String>,
+        tenant: &str,
+    ) -> Result<(), AppError> {
+        // 删除指定 tenant 的旧权限
+        sqlx::query("DELETE FROM permissions WHERE user_id = ? AND tenant = ?")
             .bind(user_id)
+            .bind(tenant)
             .execute(pool)
             .await?;
 
@@ -405,14 +428,23 @@ impl AdminService {
         for emp in &employees {
             let id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)",
+                "INSERT INTO permissions (id, user_id, employee, tenant, allowed) VALUES (?, ?, ?, ?, 1)",
             )
             .bind(&id)
             .bind(user_id)
             .bind(emp)
+            .bind(tenant)
             .execute(pool)
             .await?;
         }
+
+        // 同步 user_tenants 映射
+        sqlx::query("INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(user_id)
+            .bind(tenant)
+            .execute(pool)
+            .await?;
 
         self.log_audit(
             pool,
@@ -422,7 +454,8 @@ impl AdminService {
             Some(user_id),
             Some(
                 &serde_json::json!({
-                    "allowed_employees": employees
+                    "allowed_employees": employees,
+                    "tenant": tenant
                 })
                 .to_string(),
             ),
@@ -597,6 +630,7 @@ impl AdminService {
     }
 
     /// 查询审计日志（分页 + 筛选）
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_audit_logs(
         &self,
         pool: &DbPool,

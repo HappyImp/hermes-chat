@@ -12,8 +12,8 @@ pub async fn register(
     State(state): State<AppState>,
     Json(input): Json<CreateUser>,
 ) -> Result<(StatusCode, Json<Value>), AppError> {
-    validate_username(&input.username).map_err(|msg| AppError::BadRequest(msg))?;
-    validate_password(&input.password).map_err(|msg| AppError::BadRequest(msg))?;
+    validate_username(&input.username).map_err(AppError::BadRequest)?;
+    validate_password(&input.password).map_err(AppError::BadRequest)?;
 
     let (user, token) = state.auth_service.register(&state.pool, input).await?;
 
@@ -32,7 +32,7 @@ pub async fn login(
     State(state): State<AppState>,
     Json(input): Json<LoginUser>,
 ) -> Result<Json<Value>, AppError> {
-    validate_username(&input.username).map_err(|msg| AppError::BadRequest(msg))?;
+    validate_username(&input.username).map_err(AppError::BadRequest)?;
 
     let token = state.auth_service.login(&state.pool, input).await?;
 

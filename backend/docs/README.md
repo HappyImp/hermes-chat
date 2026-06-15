@@ -7,12 +7,15 @@
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [prd/2026-06-14_rust-backend.md](prd/2026-06-14_rust-backend.md) | 2026-06-14 | 后端功能 PRD：账户系统、会话管理、权限控制、SSE 代理、API 端点 |
+| [prd/2026-06-15_employee-profiles.md](prd/2026-06-15_employee-profiles.md) | 2026-06-15 | KAN-205: 员工列表接口（从 profiles 推导） |
+| [prd/2026-06-15_tenant-permissions.md](prd/2026-06-15_tenant-permissions.md) | 2026-06-15 | KAN-207/208: 扩展权限模型 + Tenant 权限过滤中间件 |
 
 ## 🏗️ 设计文档
 
 | 文档 | 日期 | 说明 |
 |------|------|------|
 | [design/2026-06-14_rust-backend-impl.md](design/2026-06-14_rust-backend-impl.md) | 2026-06-14 | 实现设计：技术栈、数据库 schema、认证流程、权限模型、安全措施 |
+| [design/2026-06-15_kan-205-207-208.md](design/2026-06-15_kan-205-207-208.md) | 2026-06-15 | KAN-205/207/208 实现设计：ProfileService、Tenant 中间件、权限扩展 |
 
 ## 📌 审查记录
 

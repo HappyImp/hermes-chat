@@ -3,10 +3,12 @@ use hermes_chat_backend::db;
 use hermes_chat_backend::handlers;
 use hermes_chat_backend::middleware::auth::auth_middleware;
 use hermes_chat_backend::middleware::cors::cors_layer;
+use hermes_chat_backend::middleware::tenant::tenant_middleware;
 use hermes_chat_backend::services::auth::AuthService;
 use hermes_chat_backend::services::employee::EmployeeService;
 use hermes_chat_backend::services::hermes::HermesClient;
 use hermes_chat_backend::services::kanban::KanbanService;
+use hermes_chat_backend::services::profile::ProfileService;
 use hermes_chat_backend::AppState;
 
 use axum::{
@@ -63,6 +65,7 @@ async fn main() {
         employee_service: EmployeeService::new(),
         hermes_client,
         kanban_service: KanbanService::new(),
+        profile_service: ProfileService::new(None),
         jwt_secret: config.jwt.secret.clone(),
     };
 
@@ -120,6 +123,7 @@ async fn main() {
         .route("/users/:id", delete(handlers::admin::delete_user))
         .route("/audit-logs", get(handlers::admin::get_audit_logs));
 
+    // KAN-208: kanban 路由加上 tenant_middleware
     let kanban_routes = Router::new()
         .route("/tasks", get(handlers::kanban::list_tasks))
         .route("/tasks/:id", get(handlers::kanban::get_task))
@@ -176,10 +180,15 @@ async fn main() {
         )
         .nest(
             "/api/kanban",
-            kanban_routes.route_layer(axum_middleware::from_fn_with_state(
-                state.clone(),
-                auth_middleware,
-            )),
+            kanban_routes
+                .route_layer(axum_middleware::from_fn_with_state(
+                    state.clone(),
+                    tenant_middleware,
+                ))
+                .route_layer(axum_middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                )),
         )
         .fallback(not_found_handler)
         .layer(cors_layer(&config.security.allowed_origins))
