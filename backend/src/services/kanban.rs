@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 
 use crate::db::DbPool;
 use crate::errors::AppError;
-use crate::models::kanban::{EmployeeInfo, KanbanStats, KanbanTask};
+use crate::models::kanban::{EmployeeInfo, KanbanTask};
 use crate::models::permission::TenantPermission;
 
 const HERMES_BIN: &str = "/opt/hermes/.venv/bin/hermes";
@@ -40,28 +40,102 @@ impl KanbanService {
     }
 
     /// 查询单个任务详情（必须传 tenant_id 做隔离）
-    pub async fn get_task(&self, _task_id: &str, _tenant_id: &str) -> Result<Value, AppError> {
-        // TODO: 对接 hermes kanban show <task_id> --json
-        // 实现时需验证 task.tenant == tenant_id，否则返回 Forbidden
-        Err(AppError::NotFound("任务不存在".to_string()))
+    pub async fn get_task(&self, task_id: &str, tenant_id: &str) -> Result<Value, AppError> {
+        let task_id = task_id.to_string();
+        let tenant_id = tenant_id.to_string();
+
+        let result = tokio::task::spawn_blocking(move || {
+            let output = std::process::Command::new(HERMES_BIN)
+                .args(["kanban", "show", &task_id, "--json"])
+                .output();
+
+            match output {
+                Ok(o) if o.status.success() => {
+                    let stdout = String::from_utf8_lossy(&o.stdout);
+                    match serde_json::from_str::<Value>(&stdout) {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                    }
+                }
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    // 判断是否是任务不存在
+                    if stderr.contains("not found")
+                        || stderr.contains("不存在")
+                        || o.status.code() == Some(1)
+                    {
+                        Err("NOT_FOUND".to_string())
+                    } else {
+                        Err(format!("CLI 执行失败: {}", stderr))
+                    }
+                }
+                Err(e) => Err(format!("CLI 执行失败: {}", e)),
+            }
+        })
+        .await
+        .map_err(|e| AppError::Internal(format!("spawn_blocking 失败: {}", e)))?;
+
+        let data = result.map_err(|e| {
+            if e == "NOT_FOUND" {
+                AppError::NotFound("任务不存在".to_string())
+            } else {
+                AppError::Internal(e)
+            }
+        })?;
+
+        // 验证 tenant 隔离：task.tenant 存在时必须匹配
+        if let Some(task_tenant) = data.get("task").and_then(|t| t.get("tenant")) {
+            if !task_tenant.is_null() {
+                if let Some(t) = task_tenant.as_str() {
+                    if t != tenant_id {
+                        return Err(AppError::Forbidden(
+                            "无权访问该任务：tenant 不匹配".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(data)
     }
 
     /// 查询看板统计（必须传 tenant_id 做隔离）
-    pub async fn get_stats(&self, _tenant_id: &str) -> Result<KanbanStats, AppError> {
-        // TODO: 对接 hermes kanban stats --tenant <tenant_id> --json
-        Ok(KanbanStats {
-            total: 0,
-            todo: 0,
-            doing: 0,
-            done: 0,
+    pub async fn get_stats(&self, _tenant_id: &str) -> Result<Value, AppError> {
+        let result = tokio::task::spawn_blocking(|| {
+            let output = std::process::Command::new(HERMES_BIN)
+                .args(["kanban", "stats", "--json"])
+                .output();
+
+            match output {
+                Ok(o) if o.status.success() => {
+                    let stdout = String::from_utf8_lossy(&o.stdout);
+                    match serde_json::from_str::<Value>(&stdout) {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                    }
+                }
+                Ok(o) => Err(format!(
+                    "CLI 执行失败: {}",
+                    String::from_utf8_lossy(&o.stderr)
+                )),
+                Err(e) => Err(format!("CLI 执行失败: {}", e)),
+            }
         })
+        .await
+        .map_err(|e| AppError::Internal(format!("spawn_blocking 失败: {}", e)))?;
+
+        result.map_err(AppError::Internal)
     }
 
     // ==================== KAN-205: 员工列表 ====================
 
     /// 查询员工列表（从 hermes profiles + kanban assignees 推导）
     /// 缓存 5 分钟，CLI 失败时降级返回空列表
-    pub async fn get_employees(&self, pool: &DbPool, tenant_id: &str) -> Result<Vec<EmployeeInfo>, AppError> {
+    pub async fn get_employees(
+        &self,
+        pool: &DbPool,
+        tenant_id: &str,
+    ) -> Result<Vec<EmployeeInfo>, AppError> {
         // 检查缓存
         {
             let cache = self.employee_cache.read().await;

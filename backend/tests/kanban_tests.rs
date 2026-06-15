@@ -266,12 +266,7 @@ async fn test_check_tenant_access_denied() {
 // ==================== filter_by_tenant 测试 ====================
 
 /// 辅助函数：给 tenant 添加员工权限
-async fn grant_employee_permission(
-    pool: &SqlitePool,
-    user_id: &str,
-    employee: &str,
-    tenant: &str,
-) {
+async fn grant_employee_permission(pool: &SqlitePool, user_id: &str, employee: &str, tenant: &str) {
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO permissions (id, user_id, employee, allowed, tenant) VALUES (?, ?, ?, 1, ?)",

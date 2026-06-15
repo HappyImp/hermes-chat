@@ -130,6 +130,9 @@ async fn main() {
         .route("/stats", get(handlers::kanban::get_stats))
         .route("/employees", get(handlers::kanban::get_employees));
 
+    // KAN-206: WebSocket 事件代理 — 自带 JWT 验证（从 query param），不走 auth_middleware
+    let kanban_ws_routes = Router::new().route("/events", get(handlers::kanban::ws_events));
+
     let cleanup_pool = state.pool.clone();
     let cleanup_auth = state.auth_service.clone();
     tokio::spawn(async move {
@@ -190,6 +193,7 @@ async fn main() {
                     auth_middleware,
                 )),
         )
+        .nest("/api/kanban", kanban_ws_routes)
         .fallback(not_found_handler)
         .layer(cors_layer(&config.security.allowed_origins))
         .layer(TraceLayer::new_for_http())

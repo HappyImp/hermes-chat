@@ -5,7 +5,7 @@ edition = "2021"
 description = "Hermes Chat Rust Backend - 账户系统 + 会话管理 + SSE 代理"
 
 [dependencies]
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 serde = { version = "1", features = ["derive"] }
