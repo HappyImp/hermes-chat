@@ -49,7 +49,30 @@ impl HermesClient {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AppError::Internal(format!("Hermes 请求失败: {}", e)))?;
+            .map_err(|e| AppError::ServiceUnavailable(format!("Hermes 请求失败: {}", e)))?;
+
+        // 透传上游状态码，返回具体错误
+        let status = response.status();
+        if !status.is_success() {
+            let status_code = status.as_u16();
+            let body_text = response.text().await.unwrap_or_default();
+            tracing::warn!(
+                "Hermes 上游返回错误: status={}, body={}",
+                status_code,
+                body_text
+            );
+
+            return match status_code {
+                429 => Err(AppError::ServiceUnavailable(
+                    "AI服务繁忙，请稍后再试".to_string(),
+                )),
+                503 => Err(AppError::ServiceUnavailable("AI服务暂时不可用".to_string())),
+                _ => Err(AppError::ServiceUnavailable(format!(
+                    "AI服务异常 (HTTP {})",
+                    status_code
+                ))),
+            };
+        }
 
         Ok(response)
     }

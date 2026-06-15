@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 use crate::db::DbPool;
 use crate::errors::AppError;
-use crate::models::invitation_code::{CreateInvitationCode, InvitationCode, InvitationCodeResponse};
+use crate::models::invitation_code::{
+    CreateInvitationCode, InvitationCode, InvitationCodeResponse,
+};
 
 #[derive(Clone)]
 pub struct AdminService;
@@ -29,9 +31,9 @@ impl AdminService {
         let employees_json = serde_json::to_string(&input.allowed_employees)
             .map_err(|_| AppError::Internal("序列化员工列表失败".to_string()))?;
 
-        let expires_at = input.expires_in_hours.map(|h| {
-            (Utc::now() + Duration::hours(h)).to_rfc3339()
-        });
+        let expires_at = input
+            .expires_in_hours
+            .map(|h| (Utc::now() + Duration::hours(h)).to_rfc3339());
 
         let mut codes = Vec::new();
         let count = input.count.max(1);
@@ -54,17 +56,27 @@ impl AdminService {
             .await?;
 
             // 审计日志
-            self.log_audit(pool, operator_id, "create_code", "invitation_code", Some(&id), Some(&serde_json::json!({
-                "code": code,
-                "allowed_employees": input.allowed_employees
-            }).to_string())).await?;
-
-            let ic = sqlx::query_as::<_, InvitationCode>(
-                "SELECT * FROM invitation_codes WHERE id = ?"
+            self.log_audit(
+                pool,
+                operator_id,
+                "create_code",
+                "invitation_code",
+                Some(&id),
+                Some(
+                    &serde_json::json!({
+                        "code": code,
+                        "allowed_employees": input.allowed_employees
+                    })
+                    .to_string(),
+                ),
             )
-            .bind(&id)
-            .fetch_one(pool)
             .await?;
+
+            let ic =
+                sqlx::query_as::<_, InvitationCode>("SELECT * FROM invitation_codes WHERE id = ?")
+                    .bind(&id)
+                    .fetch_one(pool)
+                    .await?;
 
             codes.push(ic.to_response());
         }
@@ -84,19 +96,22 @@ impl AdminService {
 
         let (total, codes) = if status == "all" {
             let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invitation_codes")
-                .fetch_one(pool).await?;
+                .fetch_one(pool)
+                .await?;
             let codes = sqlx::query_as::<_, InvitationCode>(
-                "SELECT * FROM invitation_codes ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                "SELECT * FROM invitation_codes ORDER BY created_at DESC LIMIT ? OFFSET ?",
             )
-            .bind(limit).bind(offset)
-            .fetch_all(pool).await?;
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?;
             (total, codes)
         } else {
-            let total: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM invitation_codes WHERE status = ?"
-            )
-            .bind(status)
-            .fetch_one(pool).await?;
+            let total: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM invitation_codes WHERE status = ?")
+                    .bind(status)
+                    .fetch_one(pool)
+                    .await?;
             let codes = sqlx::query_as::<_, InvitationCode>(
                 "SELECT * FROM invitation_codes WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
             )
@@ -126,17 +141,27 @@ impl AdminService {
         code_id: &str,
     ) -> Result<(), AppError> {
         let result = sqlx::query(
-            "UPDATE invitation_codes SET status = 'disabled' WHERE id = ? AND status = 'active'"
+            "UPDATE invitation_codes SET status = 'disabled' WHERE id = ? AND status = 'active'",
         )
         .bind(code_id)
         .execute(pool)
         .await?;
 
         if result.rows_affected() == 0 {
-            return Err(AppError::NotFound("授权码不存在或状态不是 active".to_string()));
+            return Err(AppError::NotFound(
+                "授权码不存在或状态不是 active".to_string(),
+            ));
         }
 
-        self.log_audit(pool, operator_id, "disable_code", "invitation_code", Some(code_id), None).await?;
+        self.log_audit(
+            pool,
+            operator_id,
+            "disable_code",
+            "invitation_code",
+            Some(code_id),
+            None,
+        )
+        .await?;
         Ok(())
     }
 
@@ -156,7 +181,15 @@ impl AdminService {
             return Err(AppError::NotFound("授权码不存在".to_string()));
         }
 
-        self.log_audit(pool, operator_id, "delete_code", "invitation_code", Some(code_id), None).await?;
+        self.log_audit(
+            pool,
+            operator_id,
+            "delete_code",
+            "invitation_code",
+            Some(code_id),
+            None,
+        )
+        .await?;
         Ok(())
     }
 
@@ -168,20 +201,23 @@ impl AdminService {
         code: &str,
         user_id: &str,
     ) -> Result<Vec<String>, AppError> {
-        let ic = sqlx::query_as::<_, InvitationCode>(
-            "SELECT * FROM invitation_codes WHERE code = ?"
-        )
-        .bind(code)
-        .fetch_optional(pool)
-        .await?
-        .ok_or(AppError::BadRequest("授权码无效或已过期".to_string()))?;
+        let ic =
+            sqlx::query_as::<_, InvitationCode>("SELECT * FROM invitation_codes WHERE code = ?")
+                .bind(code)
+                .fetch_optional(pool)
+                .await?
+                .ok_or(AppError::BadRequest("授权码无效或已过期".to_string()))?;
 
         if !ic.is_valid() {
             return Err(AppError::BadRequest("授权码无效或已过期".to_string()));
         }
 
         // 更新授权码状态
-        let new_status = if ic.used_count + 1 >= ic.max_uses { "used" } else { "active" };
+        let new_status = if ic.used_count + 1 >= ic.max_uses {
+            "used"
+        } else {
+            "active"
+        };
         sqlx::query(
             "UPDATE invitation_codes SET used_count = used_count + 1, used_by = ?, status = ? WHERE id = ?"
         )
@@ -192,8 +228,8 @@ impl AdminService {
         .await?;
 
         // 解析员工列表
-        let employees: Vec<String> = serde_json::from_str(&ic.allowed_employees)
-            .unwrap_or_default();
+        let employees: Vec<String> =
+            serde_json::from_str(&ic.allowed_employees).unwrap_or_default();
 
         Ok(employees)
     }
@@ -260,7 +296,8 @@ impl AdminService {
         let user_list: Vec<serde_json::Value> = users
             .iter()
             .map(|u| {
-                let employees: Vec<String> = u.allowed_employees
+                let employees: Vec<String> = u
+                    .allowed_employees
                     .as_deref()
                     .unwrap_or("")
                     .split(',')
@@ -303,29 +340,28 @@ impl AdminService {
         }
 
         let user = sqlx::query_as::<_, UserRow>(
-            "SELECT id, username, role, enabled, created_at FROM users WHERE id = ?"
+            "SELECT id, username, role, enabled, created_at FROM users WHERE id = ?",
         )
         .bind(user_id)
         .fetch_optional(pool)
         .await?
         .ok_or(AppError::NotFound("用户不存在".to_string()))?;
 
-        let invitation_code: Option<String> = sqlx::query_scalar(
-            "SELECT code FROM invitation_codes WHERE used_by = ? LIMIT 1"
-        )
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await?;
+        let invitation_code: Option<String> =
+            sqlx::query_scalar("SELECT code FROM invitation_codes WHERE used_by = ? LIMIT 1")
+                .bind(user_id)
+                .fetch_optional(pool)
+                .await?;
 
         let employees: Vec<String> = sqlx::query_scalar(
-            "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1"
+            "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1",
         )
         .bind(user_id)
         .fetch_all(pool)
         .await?;
 
         let session_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND deleted_at IS NULL"
+            "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND deleted_at IS NULL",
         )
         .bind(user_id)
         .fetch_one(pool)
@@ -369,7 +405,7 @@ impl AdminService {
         for emp in &employees {
             let id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)"
+                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)",
             )
             .bind(&id)
             .bind(user_id)
@@ -378,9 +414,20 @@ impl AdminService {
             .await?;
         }
 
-        self.log_audit(pool, operator_id, "modify_permission", "user", Some(user_id), Some(&serde_json::json!({
-            "allowed_employees": employees
-        }).to_string())).await?;
+        self.log_audit(
+            pool,
+            operator_id,
+            "modify_permission",
+            "user",
+            Some(user_id),
+            Some(
+                &serde_json::json!({
+                    "allowed_employees": employees
+                })
+                .to_string(),
+            ),
+        )
+        .await?;
 
         Ok(())
     }
@@ -404,8 +451,13 @@ impl AdminService {
             return Err(AppError::NotFound("用户不存在".to_string()));
         }
 
-        let action = if enabled { "enable_user" } else { "disable_user" };
-        self.log_audit(pool, operator_id, action, "user", Some(user_id), None).await?;
+        let action = if enabled {
+            "enable_user"
+        } else {
+            "disable_user"
+        };
+        self.log_audit(pool, operator_id, action, "user", Some(user_id), None)
+            .await?;
         Ok(())
     }
 
@@ -429,23 +481,45 @@ impl AdminService {
         // 事务：级联删除（原子操作，失败全部回滚）
         let mut tx = pool.begin().await?;
 
-        sqlx::query("DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)")
-            .bind(user_id).execute(&mut *tx).await?;
+        sqlx::query(
+            "DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)",
+        )
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
         sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(user_id).execute(&mut *tx).await?;
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM permissions WHERE user_id = ?")
-            .bind(user_id).execute(&mut *tx).await?;
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("UPDATE invitation_codes SET used_by = NULL WHERE used_by = ?")
-            .bind(user_id).execute(&mut *tx).await?;
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM token_blacklist WHERE user_id = ?")
-            .bind(user_id).execute(&mut *tx).await?;
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(user_id).execute(&mut *tx).await?;
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
 
         // 审计日志（事务外：operator_id 是管理员，不受删除影响）
-        self.log_audit(pool, operator_id, "delete_user", "user", Some(user_id), None).await?;
+        self.log_audit(
+            pool,
+            operator_id,
+            "delete_user",
+            "user",
+            Some(user_id),
+            None,
+        )
+        .await?;
         Ok(())
     }
 
@@ -453,7 +527,8 @@ impl AdminService {
 
     pub async fn dashboard_stats(&self, pool: &DbPool) -> Result<serde_json::Value, AppError> {
         let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-            .fetch_one(pool).await?;
+            .fetch_one(pool)
+            .await?;
 
         // 统一用 RFC3339 格式比较（与 created_at 存储格式一致）
         let today_start = Utc::now()
@@ -462,28 +537,28 @@ impl AdminService {
             .unwrap()
             .and_utc()
             .to_rfc3339();
-        let today_new: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE created_at >= ?"
-        )
-        .bind(&today_start)
-        .fetch_one(pool).await?;
+        let today_new: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE created_at >= ?")
+            .bind(&today_start)
+            .fetch_one(pool)
+            .await?;
 
-        let active_codes: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM invitation_codes WHERE status = 'active'"
-        )
-        .fetch_one(pool).await?;
+        let active_codes: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM invitation_codes WHERE status = 'active'")
+                .fetch_one(pool)
+                .await?;
 
-        let used_codes: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM invitation_codes WHERE status = 'used'"
-        )
-        .fetch_one(pool).await?;
+        let used_codes: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM invitation_codes WHERE status = 'used'")
+                .fetch_one(pool)
+                .await?;
 
         let yesterday = (Utc::now() - Duration::hours(24)).to_rfc3339();
         let active_sessions: i64 = sqlx::query_scalar(
-            "SELECT COUNT(DISTINCT session_id) FROM messages WHERE created_at >= ?"
+            "SELECT COUNT(DISTINCT session_id) FROM messages WHERE created_at >= ?",
         )
         .bind(&yesterday)
-        .fetch_one(pool).await?;
+        .fetch_one(pool)
+        .await?;
 
         Ok(serde_json::json!({
             "total_users": total_users,
@@ -536,10 +611,18 @@ impl AdminService {
 
         // 动态拼接 WHERE 条件
         let mut conditions: Vec<String> = Vec::new();
-        if user_id.is_some() { conditions.push("operator_id = ?".into()); }
-        if action.is_some() { conditions.push("action = ?".into()); }
-        if start_date.is_some() { conditions.push("created_at >= ?".into()); }
-        if end_date.is_some() { conditions.push("created_at <= ?".into()); }
+        if user_id.is_some() {
+            conditions.push("operator_id = ?".into());
+        }
+        if action.is_some() {
+            conditions.push("action = ?".into());
+        }
+        if start_date.is_some() {
+            conditions.push("created_at >= ?".into());
+        }
+        if end_date.is_some() {
+            conditions.push("created_at <= ?".into());
+        }
 
         let where_clause = if conditions.is_empty() {
             String::new()
@@ -555,18 +638,34 @@ impl AdminService {
 
         // 绑定参数的闭包
         let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
-        if let Some(uid) = user_id { count_query = count_query.bind(uid); }
-        if let Some(act) = action { count_query = count_query.bind(act); }
-        if let Some(sd) = start_date { count_query = count_query.bind(sd); }
-        if let Some(ed) = end_date { count_query = count_query.bind(ed); }
+        if let Some(uid) = user_id {
+            count_query = count_query.bind(uid);
+        }
+        if let Some(act) = action {
+            count_query = count_query.bind(act);
+        }
+        if let Some(sd) = start_date {
+            count_query = count_query.bind(sd);
+        }
+        if let Some(ed) = end_date {
+            count_query = count_query.bind(ed);
+        }
 
         let total: i64 = count_query.fetch_one(pool).await?;
 
         let mut data_query = sqlx::query_as::<_, crate::models::audit_log::AuditLog>(&query_sql);
-        if let Some(uid) = user_id { data_query = data_query.bind(uid); }
-        if let Some(act) = action { data_query = data_query.bind(act); }
-        if let Some(sd) = start_date { data_query = data_query.bind(sd); }
-        if let Some(ed) = end_date { data_query = data_query.bind(ed); }
+        if let Some(uid) = user_id {
+            data_query = data_query.bind(uid);
+        }
+        if let Some(act) = action {
+            data_query = data_query.bind(act);
+        }
+        if let Some(sd) = start_date {
+            data_query = data_query.bind(sd);
+        }
+        if let Some(ed) = end_date {
+            data_query = data_query.bind(ed);
+        }
         data_query = data_query.bind(per_page).bind(offset);
 
         let logs = data_query.fetch_all(pool).await?;
@@ -601,8 +700,12 @@ impl AdminService {
         let chars: Vec<char> = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".chars().collect();
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        let part1: String = (0..4).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
-        let part2: String = (0..4).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
+        let part1: String = (0..4)
+            .map(|_| chars[rng.gen_range(0..chars.len())])
+            .collect();
+        let part2: String = (0..4)
+            .map(|_| chars[rng.gen_range(0..chars.len())])
+            .collect();
         format!("HC-{}-{}", part1, part2)
     }
 }

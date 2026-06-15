@@ -5,16 +5,13 @@ use axum::{
 };
 use serde_json::{json, Value};
 
-use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::models::session::CreateSession;
 use crate::services::session::SessionService;
+use crate::AppState;
 
-pub async fn list(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<Value>, AppError> {
+pub async fn list(State(state): State<AppState>, auth: AuthUser) -> Result<Json<Value>, AppError> {
     let sessions = SessionService::list(&state.pool, &auth.user_id).await?;
 
     Ok(Json(json!({ "sessions": sessions })))

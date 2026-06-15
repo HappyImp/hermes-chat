@@ -5,11 +5,11 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::auth::AdminUser;
 use crate::models::invitation_code::CreateInvitationCode;
 use crate::services::admin::AdminService;
+use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct InvitationCodeListParams {
@@ -57,10 +57,18 @@ pub struct AuditLogParams {
     pub per_page: i32,
 }
 
-fn default_page() -> i32 { 1 }
-fn default_per_page() -> i32 { 20 }
-fn default_limit() -> i32 { 20 }
-fn default_status() -> String { "all".to_string() }
+fn default_page() -> i32 {
+    1
+}
+fn default_per_page() -> i32 {
+    20
+}
+fn default_limit() -> i32 {
+    20
+}
+fn default_status() -> String {
+    "all".to_string()
+}
 
 // ==================== 授权码管理 ====================
 
@@ -71,7 +79,9 @@ pub async fn create_invitation_codes(
     Json(input): Json<CreateInvitationCode>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    let codes = admin_svc.create_invitation_codes(&state.pool, &admin.user_id, input).await?;
+    let codes = admin_svc
+        .create_invitation_codes(&state.pool, &admin.user_id, input)
+        .await?;
     Ok(Json(json!({ "codes": codes })))
 }
 
@@ -82,7 +92,9 @@ pub async fn list_invitation_codes(
     Query(params): Query<InvitationCodeListParams>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    let result = admin_svc.list_invitation_codes(&state.pool, &params.status, params.page, params.limit).await?;
+    let result = admin_svc
+        .list_invitation_codes(&state.pool, &params.status, params.page, params.limit)
+        .await?;
     Ok(Json(result))
 }
 
@@ -93,7 +105,9 @@ pub async fn disable_invitation_code(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    admin_svc.disable_invitation_code(&state.pool, &admin.user_id, &id).await?;
+    admin_svc
+        .disable_invitation_code(&state.pool, &admin.user_id, &id)
+        .await?;
     Ok(Json(json!({ "message": "已禁用" })))
 }
 
@@ -104,7 +118,9 @@ pub async fn delete_invitation_code(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    admin_svc.delete_invitation_code(&state.pool, &admin.user_id, &id).await?;
+    admin_svc
+        .delete_invitation_code(&state.pool, &admin.user_id, &id)
+        .await?;
     Ok(Json(json!({ "message": "已删除" })))
 }
 
@@ -117,7 +133,9 @@ pub async fn list_users(
     Query(params): Query<UserListParams>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    let result = admin_svc.list_users(&state.pool, &params.search, params.page, params.limit).await?;
+    let result = admin_svc
+        .list_users(&state.pool, &params.search, params.page, params.limit)
+        .await?;
     Ok(Json(result))
 }
 
@@ -140,7 +158,9 @@ pub async fn update_user_permissions(
     Json(input): Json<UpdatePermissionsRequest>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    admin_svc.update_user_permissions(&state.pool, &admin.user_id, &id, input.allowed_employees).await?;
+    admin_svc
+        .update_user_permissions(&state.pool, &admin.user_id, &id, input.allowed_employees)
+        .await?;
     Ok(Json(json!({ "message": "权限已更新" })))
 }
 
@@ -152,8 +172,14 @@ pub async fn toggle_user_status(
     Json(input): Json<ToggleStatusRequest>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    admin_svc.toggle_user_status(&state.pool, &admin.user_id, &id, input.enabled).await?;
-    let msg = if input.enabled { "用户已启用" } else { "用户已禁用" };
+    admin_svc
+        .toggle_user_status(&state.pool, &admin.user_id, &id, input.enabled)
+        .await?;
+    let msg = if input.enabled {
+        "用户已启用"
+    } else {
+        "用户已禁用"
+    };
     Ok(Json(json!({ "message": msg })))
 }
 
@@ -164,7 +190,9 @@ pub async fn delete_user(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    admin_svc.delete_user(&state.pool, &admin.user_id, &id).await?;
+    admin_svc
+        .delete_user(&state.pool, &admin.user_id, &id)
+        .await?;
     Ok(Json(json!({ "message": "用户已删除" })))
 }
 
@@ -189,14 +217,16 @@ pub async fn get_audit_logs(
     Query(params): Query<AuditLogParams>,
 ) -> Result<Json<Value>, AppError> {
     let admin_svc = AdminService::new();
-    let result = admin_svc.get_audit_logs(
-        &state.pool,
-        params.user_id.as_deref(),
-        params.action.as_deref(),
-        params.start_date.as_deref(),
-        params.end_date.as_deref(),
-        params.page,
-        params.per_page,
-    ).await?;
+    let result = admin_svc
+        .get_audit_logs(
+            &state.pool,
+            params.user_id.as_deref(),
+            params.action.as_deref(),
+            params.start_date.as_deref(),
+            params.end_date.as_deref(),
+            params.page,
+            params.per_page,
+        )
+        .await?;
     Ok(Json(result))
 }

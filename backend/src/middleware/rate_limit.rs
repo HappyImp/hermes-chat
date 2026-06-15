@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::time::Instant;
+use tokio::sync::Mutex;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -24,9 +24,7 @@ impl RateLimiter {
     pub async fn check(&self, key: &str) -> bool {
         let now = Instant::now();
         let mut requests = self.requests.lock().await;
-        let entries = requests
-            .entry(key.to_string())
-            .or_insert_with(Vec::new);
+        let entries = requests.entry(key.to_string()).or_insert_with(Vec::new);
 
         entries.retain(|t| now.duration_since(*t).as_secs() < self.window_secs);
 

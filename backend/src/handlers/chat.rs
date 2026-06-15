@@ -7,10 +7,10 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 
-use crate::AppState;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::hermes::HermesMessage;
+use crate::AppState;
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -45,7 +45,8 @@ pub async fn completions(
         .collect();
 
     // 请求 Hermes
-    let response = state.hermes_client
+    let response = state
+        .hermes_client
         .chat_completion(&req.employee, hermes_messages)
         .await?;
 
@@ -58,8 +59,7 @@ pub async fn completions(
                 Ok(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
                     for line in text.lines() {
-                        if line.starts_with("data: ") {
-                            let data = &line[6..];
+                        if let Some(data) = line.strip_prefix("data: ") {
                             if data == "[DONE]" {
                                 yield Ok(Event::default().data("[DONE]"));
                             } else {
@@ -70,6 +70,7 @@ pub async fn completions(
                 }
                 Err(e) => {
                     tracing::warn!("SSE 流读取错误: {}", e);
+                    yield Ok(Event::default().event("error").data("数据流异常，请重试"));
                     break;
                 }
             }

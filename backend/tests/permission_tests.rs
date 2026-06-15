@@ -5,10 +5,10 @@ use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::SqlitePool;
 
 use hermes_chat_backend::db::pool::run_migrations;
-use hermes_chat_backend::services::admin::AdminService;
-use hermes_chat_backend::services::auth::AuthService;
 use hermes_chat_backend::models::invitation_code::CreateInvitationCode;
 use hermes_chat_backend::models::user::CreateUser;
+use hermes_chat_backend::services::admin::AdminService;
+use hermes_chat_backend::services::auth::AuthService;
 
 /// 创建测试用内存数据库（每个测试独立）
 async fn setup_db() -> SqlitePool {
@@ -48,7 +48,7 @@ async fn create_user(pool: &SqlitePool, username: &str) -> String {
     let now = chrono::Utc::now().to_rfc3339();
     sqlx::query(
         "INSERT INTO users (id, username, password_hash, role, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, 'user', 1, ?, ?)"
+         VALUES (?, ?, ?, 'user', 1, ?, ?)",
     )
     .bind(&id)
     .bind(username)
@@ -70,7 +70,10 @@ async fn create_code(pool: &SqlitePool, admin_id: &str, employees: Vec<&str>) ->
         expires_in_hours: Some(24),
         note: Some("测试码".to_string()),
     };
-    let codes = svc.create_invitation_codes(pool, admin_id, input).await.unwrap();
+    let codes = svc
+        .create_invitation_codes(pool, admin_id, input)
+        .await
+        .unwrap();
     codes[0].code.clone()
 }
 
@@ -88,7 +91,7 @@ async fn test_create_invitation_code() {
 
     // 验证数据库记录
     let row: (String, String, String) = sqlx::query_as(
-        "SELECT code, status, allowed_employees FROM invitation_codes WHERE code = ?"
+        "SELECT code, status, allowed_employees FROM invitation_codes WHERE code = ?",
     )
     .bind(&code)
     .fetch_one(&pool)
@@ -129,7 +132,10 @@ async fn test_list_invitation_codes() {
     }
 
     let svc = AdminService::new();
-    let result = svc.list_invitation_codes(&pool, "all", 1, 10).await.unwrap();
+    let result = svc
+        .list_invitation_codes(&pool, "all", 1, 10)
+        .await
+        .unwrap();
     let total = result["total"].as_i64().unwrap();
     assert_eq!(total, 3);
     let codes = result["codes"].as_array().unwrap();
@@ -150,7 +156,9 @@ async fn test_disable_invitation_code() {
         .unwrap();
 
     let svc = AdminService::new();
-    svc.disable_invitation_code(&pool, &admin_id, &code_id).await.unwrap();
+    svc.disable_invitation_code(&pool, &admin_id, &code_id)
+        .await
+        .unwrap();
 
     // 验证状态
     let status: String = sqlx::query_scalar("SELECT status FROM invitation_codes WHERE id = ?")
@@ -174,7 +182,9 @@ async fn test_delete_invitation_code() {
         .unwrap();
 
     let svc = AdminService::new();
-    svc.delete_invitation_code(&pool, &admin_id, &code_id).await.unwrap();
+    svc.delete_invitation_code(&pool, &admin_id, &code_id)
+        .await
+        .unwrap();
 
     // 验证删除
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invitation_codes WHERE id = ?")
@@ -207,13 +217,12 @@ async fn test_register_user_with_invitation_code() {
     assert!(!token.is_empty());
 
     // 验证权限继承
-    let perms: Vec<String> = sqlx::query_scalar(
-        "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1"
-    )
-    .bind(&user.id)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let perms: Vec<String> =
+        sqlx::query_scalar("SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1")
+            .bind(&user.id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(perms.len(), 2);
     assert!(perms.contains(&"老财".to_string()));
     assert!(perms.contains(&"小K".to_string()));
@@ -343,30 +352,33 @@ async fn test_update_user_permissions() {
 
     // 设置权限
     svc.update_user_permissions(
-        &pool, &admin_id, &user_id, vec!["老财".to_string(), "404".to_string()]
-    ).await.unwrap();
-
-    let perms: Vec<String> = sqlx::query_scalar(
-        "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1"
+        &pool,
+        &admin_id,
+        &user_id,
+        vec!["老财".to_string(), "404".to_string()],
     )
-    .bind(&user_id)
-    .fetch_all(&pool)
     .await
     .unwrap();
+
+    let perms: Vec<String> =
+        sqlx::query_scalar("SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1")
+            .bind(&user_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(perms.len(), 2);
 
     // 修改权限（替换为新列表）
-    svc.update_user_permissions(
-        &pool, &admin_id, &user_id, vec!["铁壳".to_string()]
-    ).await.unwrap();
+    svc.update_user_permissions(&pool, &admin_id, &user_id, vec!["铁壳".to_string()])
+        .await
+        .unwrap();
 
-    let perms2: Vec<String> = sqlx::query_scalar(
-        "SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1"
-    )
-    .bind(&user_id)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let perms2: Vec<String> =
+        sqlx::query_scalar("SELECT employee FROM permissions WHERE user_id = ? AND allowed = 1")
+            .bind(&user_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(perms2.len(), 1);
     assert_eq!(perms2[0], "铁壳");
 }
@@ -380,7 +392,9 @@ async fn test_toggle_user_status() {
     let svc = AdminService::new();
 
     // 禁用
-    svc.toggle_user_status(&pool, &admin_id, &user_id, false).await.unwrap();
+    svc.toggle_user_status(&pool, &admin_id, &user_id, false)
+        .await
+        .unwrap();
     let enabled: i32 = sqlx::query_scalar("SELECT enabled FROM users WHERE id = ?")
         .bind(&user_id)
         .fetch_one(&pool)
@@ -389,7 +403,9 @@ async fn test_toggle_user_status() {
     assert_eq!(enabled, 0);
 
     // 重新启用
-    svc.toggle_user_status(&pool, &admin_id, &user_id, true).await.unwrap();
+    svc.toggle_user_status(&pool, &admin_id, &user_id, true)
+        .await
+        .unwrap();
     let enabled: i32 = sqlx::query_scalar("SELECT enabled FROM users WHERE id = ?")
         .bind(&user_id)
         .fetch_one(&pool)
@@ -406,9 +422,9 @@ async fn test_delete_user_cascade() {
 
     // 给用户加权限
     let svc = AdminService::new();
-    svc.update_user_permissions(
-        &pool, &admin_id, &user_id, vec!["老财".to_string()]
-    ).await.unwrap();
+    svc.update_user_permissions(&pool, &admin_id, &user_id, vec!["老财".to_string()])
+        .await
+        .unwrap();
 
     // 删除用户
     svc.delete_user(&pool, &admin_id, &user_id).await.unwrap();
@@ -454,27 +470,36 @@ async fn test_audit_log_created_on_operations() {
     create_code(&pool, &admin_id, vec!["老财"]).await;
 
     // 修改权限
-    svc.update_user_permissions(
-        &pool, &admin_id, &user_id, vec!["铁壳".to_string()]
-    ).await.unwrap();
+    svc.update_user_permissions(&pool, &admin_id, &user_id, vec!["铁壳".to_string()])
+        .await
+        .unwrap();
 
     // 禁用用户
-    svc.toggle_user_status(&pool, &admin_id, &user_id, false).await.unwrap();
+    svc.toggle_user_status(&pool, &admin_id, &user_id, false)
+        .await
+        .unwrap();
 
     // 验证审计日志
     let logs: Vec<(String, String)> = sqlx::query_as(
-        "SELECT action, target_type FROM audit_logs WHERE operator_id = ? ORDER BY created_at"
+        "SELECT action, target_type FROM audit_logs WHERE operator_id = ? ORDER BY created_at",
     )
     .bind(&admin_id)
     .fetch_all(&pool)
     .await
     .unwrap();
 
-    assert!(logs.len() >= 3, "至少应有 3 条审计日志，实际 {}", logs.len());
+    assert!(
+        logs.len() >= 3,
+        "至少应有 3 条审计日志，实际 {}",
+        logs.len()
+    );
 
     let actions: Vec<&str> = logs.iter().map(|(a, _)| a.as_str()).collect();
     assert!(actions.contains(&"create_code"), "应有 create_code 日志");
-    assert!(actions.contains(&"modify_permission"), "应有 modify_permission 日志");
+    assert!(
+        actions.contains(&"modify_permission"),
+        "应有 modify_permission 日志"
+    );
     assert!(actions.contains(&"disable_user"), "应有 disable_user 日志");
 }
 
@@ -489,7 +514,7 @@ async fn test_audit_log_on_delete_user() {
 
     // 审计日志应在用户删除后依然存在（operator 是 admin）
     let action: String = sqlx::query_scalar(
-        "SELECT action FROM audit_logs WHERE target_id = ? AND action = 'delete_user'"
+        "SELECT action FROM audit_logs WHERE target_id = ? AND action = 'delete_user'",
     )
     .bind(&user_id)
     .fetch_one(&pool)
@@ -541,7 +566,10 @@ async fn test_token_blacklist() {
 
     // 拉黑
     let exp = chrono::Utc::now().timestamp() as usize + 3600;
-    auth_svc.logout(&pool, &token, "user-123", exp).await.unwrap();
+    auth_svc
+        .logout(&pool, &token, "user-123", exp)
+        .await
+        .unwrap();
 
     // 已拉黑
     assert!(auth_svc.is_token_blacklisted(&pool, &token).await.unwrap());

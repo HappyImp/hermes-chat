@@ -86,7 +86,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByText('注册并登录'));
 
     await waitFor(() => {
-      expect(mockRegister).toHaveBeenCalledWith('newuser', 'pass123');
+      expect(mockRegister).toHaveBeenCalledWith('newuser', 'pass123', '');
       expect(mockLogin).toHaveBeenCalledWith('newuser', 'pass123');
       expect(useAuthStore.getState().isAuthenticated).toBe(true);
     });

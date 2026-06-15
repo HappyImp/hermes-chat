@@ -1,5 +1,5 @@
-use tower_http::cors::{CorsLayer, AllowMethods};
 use axum::http::{HeaderName, HeaderValue, Method};
+use tower_http::cors::{AllowMethods, CorsLayer};
 
 pub fn cors_layer(allowed_origins: &[String]) -> CorsLayer {
     let origins: Vec<HeaderValue> = allowed_origins

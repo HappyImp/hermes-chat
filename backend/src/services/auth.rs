@@ -1,7 +1,7 @@
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{encode, EncodingKey, Header};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::db::DbPool;
@@ -23,14 +23,16 @@ impl AuthService {
         }
     }
 
-    pub async fn register(&self, pool: &DbPool, input: CreateUser) -> Result<(UserResponse, String), AppError> {
+    pub async fn register(
+        &self,
+        pool: &DbPool,
+        input: CreateUser,
+    ) -> Result<(UserResponse, String), AppError> {
         // 检查用户名是否存在
-        let existing = sqlx::query_as::<_, User>(
-            "SELECT * FROM users WHERE username = ?"
-        )
-        .bind(&input.username)
-        .fetch_optional(pool)
-        .await?;
+        let existing = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = ?")
+            .bind(&input.username)
+            .fetch_optional(pool)
+            .await?;
 
         if existing.is_some() {
             return Err(AppError::Auth(AuthError::UserExists));
@@ -96,13 +98,13 @@ impl AuthService {
         .await?;
 
         // 继承授权码的员工权限
-        let employees: Vec<String> = serde_json::from_str(&code_row.allowed_employees)
-            .unwrap_or_default();
+        let employees: Vec<String> =
+            serde_json::from_str(&code_row.allowed_employees).unwrap_or_default();
 
         for emp in &employees {
             let perm_id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)"
+                "INSERT INTO permissions (id, user_id, employee, allowed) VALUES (?, ?, ?, 1)",
             )
             .bind(&perm_id)
             .bind(&id)
@@ -112,7 +114,11 @@ impl AuthService {
         }
 
         // 更新授权码状态
-        let new_status = if code_row.used_count + 1 >= code_row.max_uses { "used" } else { "active" };
+        let new_status = if code_row.used_count + 1 >= code_row.max_uses {
+            "used"
+        } else {
+            "active"
+        };
         sqlx::query(
             "UPDATE invitation_codes SET used_count = used_count + 1, used_by = ?, status = ? WHERE id = ?"
         )
@@ -138,17 +144,15 @@ impl AuthService {
     }
 
     pub async fn login(&self, pool: &DbPool, input: LoginUser) -> Result<String, AppError> {
-        let user = sqlx::query_as::<_, User>(
-            "SELECT * FROM users WHERE username = ?"
-        )
-        .bind(&input.username)
-        .fetch_optional(pool)
-        .await?
-        .ok_or(AppError::Auth(AuthError::UserNotFound))?;
+        let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = ?")
+            .bind(&input.username)
+            .fetch_optional(pool)
+            .await?
+            .ok_or(AppError::Auth(AuthError::UserNotFound))?;
 
         // 检查用户是否被禁用
         if user.enabled == 0 {
-            return Err(AppError::Auth(AuthError::UserNotFound));
+            return Err(AppError::Auth(AuthError::AccountDisabled));
         }
 
         let valid = verify(&input.password, &user.password_hash)
@@ -163,7 +167,13 @@ impl AuthService {
     }
 
     /// 将 token 加入黑名单，使其服务端失效
-    pub async fn logout(&self, pool: &DbPool, token: &str, user_id: &str, exp: usize) -> Result<(), AppError> {
+    pub async fn logout(
+        &self,
+        pool: &DbPool,
+        token: &str,
+        user_id: &str,
+        exp: usize,
+    ) -> Result<(), AppError> {
         let token_hash = Self::hash_token(token);
         let expires_at = chrono::DateTime::from_timestamp(exp as i64, 0)
             .map(|dt| dt.to_rfc3339())
@@ -186,7 +196,7 @@ impl AuthService {
         let token_hash = Self::hash_token(token);
 
         let result = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM token_blacklist WHERE token_hash = ?"
+            "SELECT COUNT(*) FROM token_blacklist WHERE token_hash = ?",
         )
         .bind(&token_hash)
         .fetch_one(pool)
@@ -199,19 +209,16 @@ impl AuthService {
     #[allow(dead_code)]
     pub async fn cleanup_expired_blacklist(&self, pool: &DbPool) -> Result<u64, AppError> {
         let now = Utc::now().to_rfc3339();
-        let result = sqlx::query(
-            "DELETE FROM token_blacklist WHERE expires_at < ?"
-        )
-        .bind(&now)
-        .execute(pool)
-        .await?;
+        let result = sqlx::query("DELETE FROM token_blacklist WHERE expires_at < ?")
+            .bind(&now)
+            .execute(pool)
+            .await?;
 
         Ok(result.rows_affected())
     }
 
     pub fn generate_token(&self, user_id: &str, role: &str) -> Result<String, AppError> {
-        let exp = Utc::now()
-            + chrono::Duration::hours(self.expires_in_hours);
+        let exp = Utc::now() + chrono::Duration::hours(self.expires_in_hours);
 
         let claims = Claims {
             sub: user_id.to_string(),
@@ -224,7 +231,7 @@ impl AuthService {
             &claims,
             &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
         )
-        .map_err(|_| AppError::Internal("Token 生成失败".to_string()))
+        .map_err(|_| AppError::Auth(AuthError::TokenGenerationFailed))
     }
 
     /// SHA-256 哈希 token，不存储原始 token

@@ -8,6 +8,7 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const authLogin = useAuthStore((s) => s.login);
@@ -30,7 +31,7 @@ export function LoginPage() {
       setLoading(true);
       try {
         if (mode === 'register') {
-          await apiRegister(username, password);
+          await apiRegister(username, password, invitationCode);
         }
         const token = await apiLogin(username, password);
         authLogin(token, username);
@@ -40,7 +41,7 @@ export function LoginPage() {
         setLoading(false);
       }
     },
-    [mode, username, password, authLogin],
+    [mode, username, password, invitationCode, authLogin],
   );
 
   return (
@@ -57,7 +58,7 @@ export function LoginPage() {
         <div className="flex mb-4 border-b border-border">
           <button
             type="button"
-            onClick={() => { setMode('login'); setError(''); }}
+            onClick={() => { setMode('login'); setError(''); setInvitationCode(''); }}
             className={`flex-1 py-2 text-sm font-medium cursor-pointer bg-transparent border-none transition-colors ${
               mode === 'login'
                 ? 'text-accent border-b-2 border-accent'
@@ -97,10 +98,20 @@ export function LoginPage() {
               className="w-full px-3 py-2 bg-bg border border-border rounded-md text-text text-sm outline-none focus:border-accent"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             />
-            {mode === 'register' && (
+            {mode === 'register' && password.length > 0 && password.length < 6 && (
               <p className="text-text2 text-xs mt-1">至少 6 位</p>
             )}
           </div>
+
+          {mode === 'register' && (
+            <input
+              type="text"
+              placeholder="授权码"
+              value={invitationCode}
+              onChange={(e) => setInvitationCode(e.target.value)}
+              className="w-full px-3 py-2 bg-bg border border-border rounded-md text-text text-sm outline-none focus:border-accent"
+            />
+          )}
 
           {error && (
             <p className="text-red-400 text-xs text-center">{error}</p>
