@@ -23,6 +23,7 @@
 | [prd/2026-06-14_employee-async-task.md](prd/2026-06-14_employee-async-task.md) | 2026-06-14 | F6 员工异步任务 PRD |
 | [prd/2026-06-14_rust-backend-account-system.md](prd/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统 PRD |
 | [prd/2026-06-14_auth-logout.md](prd/2026-06-14_auth-logout.md) | 2026-06-14 | 登出功能 (Token 黑名单) PRD |
+| [prd/2026-06-15_websocket-realtime-update.md](prd/2026-06-15_websocket-realtime-update.md) | 2026-06-15 | KAN-304 WebSocket 实时更新 PRD |
 
 ## 🏗️ 设计拆解 (docs/design/)
 
@@ -35,6 +36,7 @@
 | [design/2026-06-14_rust-backend-account-system.md](design/2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统技术设计 |
 | [design/2026-06-14_auth-login-register-design.md](design/2026-06-14_auth-login-register-design.md) | 2026-06-14 | 登录/注册功能设计 |
 | [design/2026-06-14_auth-logout-design.md](design/2026-06-14_auth-logout-design.md) | 2026-06-14 | 登出功能 (Token 黑名单) 设计 |
+| [design/2026-06-15_websocket-realtime-update.md](design/2026-06-15_websocket-realtime-update.md) | 2026-06-15 | KAN-304 WebSocket 实时更新设计 |
 
 ## 🧠 架构文档 (docs/architecture/)
 

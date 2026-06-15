@@ -31,12 +31,31 @@ vi.mock('@/api/kanban', () => ({
   fetchKanbanTask: vi.fn(),
   fetchKanbanStats: vi.fn(),
   fetchKanbanEmployees: vi.fn(),
-  KanbanWebSocket: vi.fn(),
-  getKanbanWsUrl: vi.fn(),
+  KanbanWebSocket: vi.fn().mockImplementation(() => ({
+    on: vi.fn().mockReturnValue(vi.fn()),
+    onStatus: vi.fn().mockReturnValue(vi.fn()),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    connected: false,
+    status: 'disconnected',
+  })),
+  getKanbanWsUrl: vi.fn().mockReturnValue('ws://localhost:3000/api/kanban/events?token=test'),
   groupKanbanTasksByEmployee: vi.fn().mockReturnValue(new Map()),
   deriveKanbanTaskStatus: vi.fn(),
   mapKanbanAssigneeToEmployee: vi.fn(),
 }));
+
+// Mock useKanbanWebSocket to avoid real WebSocket connections in tests
+vi.mock('../useKanbanWebSocket', () => ({
+  useKanbanWebSocket: vi.fn().mockReturnValue({
+    wsStatus: 'connected',
+    lastEvent: null,
+    reconnect: vi.fn(),
+  }),
+}));
+
+// Enable WS mode for tests
+vi.stubEnv('VITE_USE_KANBAN', 'true');
 
 const mockFetchCronJobs = vi.mocked(cronJobsApi.fetchCronJobs);
 const mockDeriveEmployeeStatus = vi.mocked(cronJobsApi.deriveEmployeeStatus);
@@ -440,6 +459,28 @@ describe('useEmployeeStatus', () => {
       expect(emp404).toBeDefined();
       expect(emp404?.taskCount).toBe(1);
       expect(emp404?.kanbanStatus).toBe('doing');
+    });
+  });
+
+  it('exposes wsStatus as connected when VITE_USE_KANBAN is true', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(result.current.wsStatus).toBe('connected');
+    });
+  });
+
+  it('exposes lastWsUpdate and wsError fields', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(result.current.lastWsUpdate).toBeNull();
+      expect(result.current.wsError).toBeNull();
+    });
+  });
+
+  it('exposes reconnect function', async () => {
+    const { result } = renderHook(() => useEmployeeStatus());
+    await waitFor(() => {
+      expect(typeof result.current.reconnect).toBe('function');
     });
   });
 });

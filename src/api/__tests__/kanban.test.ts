@@ -1,11 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   mapKanbanAssigneeToEmployee,
   deriveKanbanTaskStatus,
   groupKanbanTasksByEmployee,
   fetchKanbanTasks,
+  KanbanWebSocket,
+  getKanbanWsUrl,
 } from '../kanban';
 import type { KanbanTask } from '@/types/employee';
+import type { KanbanWsEvent } from '../kanban';
 
 function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
   return {
@@ -194,5 +197,215 @@ describe('fetchKanbanTasks', () => {
     );
     const tasks = await fetchKanbanTasks();
     expect(tasks).toEqual([]);
+  });
+});
+
+describe('KanbanWebSocket', () => {
+  let mockWs: {
+    onopen: (() => void) | null;
+    onmessage: ((msg: { data: string }) => void) | null;
+    onclose: (() => void) | null;
+    onerror: (() => void) | null;
+    close: ReturnType<typeof vi.fn>;
+    readyState: number;
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockWs = {
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+      close: vi.fn(),
+      readyState: 0, // CONNECTING
+    };
+    const MockWebSocket = vi.fn().mockImplementation(() => mockWs);
+    MockWebSocket.OPEN = 1;
+    vi.stubGlobal('WebSocket', MockWebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('creates WebSocket with correct URL', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    ws.connect();
+    expect(WebSocket).toHaveBeenCalledWith('ws://localhost:3000/events');
+  });
+
+  it('starts in disconnected status', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    expect(ws.status).toBe('disconnected');
+  });
+
+  it('sets connecting status on connect', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const statusChanges: string[] = [];
+    ws.onStatusChange((s) => statusChanges.push(s));
+
+    ws.connect();
+    expect(statusChanges).toContain('connecting');
+  });
+
+  it('sets connected status on open', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const statusChanges: string[] = [];
+    ws.onStatusChange((s) => statusChanges.push(s));
+
+    ws.connect();
+    mockWs.readyState = 1; // OPEN
+    mockWs.onopen?.();
+
+    expect(statusChanges).toContain('connected');
+    expect(ws.connected).toBe(true);
+  });
+
+  it('parses and dispatches events', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: unknown[] = [];
+    ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+
+    const testEvent = { type: 'task_changed', task_id: 't_1', task: { id: 't_1', status: 'doing' } };
+    mockWs.onmessage?.({ data: JSON.stringify(testEvent) });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(testEvent);
+  });
+
+  it('dispatches task_claimed events', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: KanbanWsEvent[] = [];
+    ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({
+      data: JSON.stringify({
+        type: 'task_claimed',
+        task_id: 't_1',
+        task: { id: 't_1', title: '任务', status: 'doing', assignee: 'coder-404', priority: '0' },
+      }),
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('task_claimed');
+  });
+
+  it('dispatches heartbeat events', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: KanbanWsEvent[] = [];
+    ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({
+      data: JSON.stringify({
+        type: 'heartbeat',
+        task_id: '',
+        task: { id: '', title: '', status: '', assignee: '', priority: '0' },
+      }),
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('heartbeat');
+  });
+
+  it('updates lastMessageTime on message', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    expect(ws.lastMessageTime).toBeNull();
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({
+      data: JSON.stringify({ type: 'task_created', task_id: 't_1', task: { id: 't_1' } }),
+    });
+
+    expect(ws.lastMessageTime).toBeInstanceOf(Date);
+  });
+
+  it('ignores invalid JSON messages', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: unknown[] = [];
+    ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({ data: 'not json' });
+
+    expect(events).toHaveLength(0);
+  });
+
+  it('schedules reconnect on close', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onclose?.();
+
+    // Should schedule reconnect after 1s (initial delay)
+    expect(ws.status).toBe('reconnecting');
+
+    vi.advanceTimersByTime(1000);
+    expect(WebSocket).toHaveBeenCalledTimes(2); // Reconnected
+  });
+
+  it('does not reconnect after disconnect()', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    ws.connect();
+    ws.disconnect();
+
+    vi.advanceTimersByTime(5000);
+    expect(WebSocket).toHaveBeenCalledTimes(1); // Only initial connect
+  });
+
+  it('cleans up on disconnect', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    ws.connect();
+    ws.disconnect();
+
+    expect(mockWs.close).toHaveBeenCalled();
+    expect(ws.status).toBe('disconnected');
+  });
+
+  it('unsubscribe works', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: unknown[] = [];
+    const unsub = ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+
+    mockWs.onmessage?.({ data: JSON.stringify({ type: 'task_created', task_id: 't_1' }) });
+    expect(events).toHaveLength(1);
+
+    unsub();
+    mockWs.onmessage?.({ data: JSON.stringify({ type: 'task_created', task_id: 't_2' }) });
+    expect(events).toHaveLength(1); // No new events
+  });
+});
+
+describe('getKanbanWsUrl', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', {
+      location: {
+        protocol: 'http:',
+        host: 'localhost:3000',
+      },
+    });
+  });
+
+  it('returns ws:// URL for http', () => {
+    const url = getKanbanWsUrl();
+    expect(url).toMatch(/^ws:\/\/localhost:3000\/chat\/api\/kanban\/events/);
+  });
+
+  it('includes token query param', () => {
+    const url = getKanbanWsUrl();
+    expect(url).toContain('token=');
   });
 });

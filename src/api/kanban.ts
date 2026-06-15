@@ -1,6 +1,7 @@
 import type { KanbanTask, KanbanStats, Employee } from '@/types/employee';
 export type { KanbanTask } from '@/types/employee';
 import { resolveAssignee } from '@/config/employeeMapping';
+import { getAuthToken } from '@/store/authStore';
 
 const API_BASE = '/chat/api/kanban';
 
@@ -13,7 +14,7 @@ export interface EmployeeKanbanStatus {
   runningCount: number;
 }
 
-// ─── REST API ───────────────────────────────────────────────────────
+// ─── REST API ──────────────────────────────────────────────────────
 
 /** 获取 kanban 任务列表 */
 export async function fetchKanbanTasks(): Promise<KanbanTask[]> {
@@ -71,36 +72,71 @@ export async function fetchKanbanEmployees(): Promise<Employee[]> {
 
 // ─── WebSocket ──────────────────────────────────────────────────────
 
-export type KanbanEventType =
-  | 'task.created'
-  | 'task.updated'
-  | 'task.completed'
-  | 'task.deleted'
-  | 'employee.status_changed';
+/**
+ * 后端实际发送的事件类型（与 CLI poll 快照对比）：
+ * - task_created: 新任务出现
+ * - task_changed: 任务状态变更（含 old_status / new_status）
+ * - task_claimed: 任务被认领
+ * - heartbeat: 心跳（仅更新时间戳，不刷新状态）
+ */
+export type KanbanWsEventType = 'task_created' | 'task_changed' | 'task_claimed' | 'heartbeat';
 
-export interface KanbanEvent {
-  type: KanbanEventType;
-  payload: unknown;
-  timestamp: string;
+export interface KanbanWsEvent {
+  type: KanbanWsEventType;
+  task_id: string;
+  task: KanbanTask;
+  /** 仅 task_changed 有 */
+  old_status?: string;
+  /** 仅 task_changed 有 */
+  new_status?: string;
 }
 
-type EventHandler = (event: KanbanEvent) => void;
+type WsEventHandler = (event: KanbanWsEvent) => void;
+
+/** WebSocket 连接状态 */
+export type WsConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+type StatusHandler = (status: WsConnectionStatus) => void;
 
 /** 指数退避重连的 WebSocket 客户端 */
 export class KanbanWebSocket {
   private ws: WebSocket | null = null;
-  private handlers = new Set<EventHandler>();
+  private handlers = new Set<WsEventHandler>();
+  private statusHandlers = new Set<StatusHandler>();
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30_000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  private _status: WsConnectionStatus = 'disconnected';
+  private _lastMessageTime: Date | null = null;
 
   constructor(private url: string) {}
 
   /** 注册事件处理器 */
-  on(handler: EventHandler): () => void {
+  on(handler: WsEventHandler): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  /** 注册连接状态处理器 */
+  onStatusChange(handler: StatusHandler): () => void {
+    this.statusHandlers.add(handler);
+    return () => this.statusHandlers.delete(handler);
+  }
+
+  /** 当前连接状态 */
+  get status(): WsConnectionStatus {
+    return this._status;
+  }
+
+  /** 连接状态别名，与 PRD 接口一致 */
+  get connectionStatus(): WsConnectionStatus {
+    return this._status;
+  }
+
+  /** 最后收到消息的时间 */
+  get lastMessageTime(): Date | null {
+    return this._lastMessageTime;
   }
 
   /** 启动连接 */
@@ -117,6 +153,7 @@ export class KanbanWebSocket {
       this.ws.close();
       this.ws = null;
     }
+    this.setStatus('disconnected');
   }
 
   /** 当前是否已连接 */
@@ -124,23 +161,36 @@ export class KanbanWebSocket {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  private setStatus(status: WsConnectionStatus): void {
+    if (this._status === status) return;
+    this._status = status;
+    for (const handler of this.statusHandlers) {
+      handler(status);
+    }
+  }
+
   private tryConnect(): void {
     if (this.stopped) return;
+
+    this.setStatus('connecting');
 
     try {
       this.ws = new WebSocket(this.url);
     } catch {
+      this.setStatus('reconnecting');
       this.scheduleReconnect();
       return;
     }
 
     this.ws.onopen = () => {
       this.reconnectDelay = 1000; // 重置退避
+      this.setStatus('connected');
     };
 
     this.ws.onmessage = (msg: MessageEvent) => {
       try {
-        const event: KanbanEvent = JSON.parse(msg.data);
+        const event: KanbanWsEvent = JSON.parse(msg.data);
+        this._lastMessageTime = new Date();
         for (const handler of this.handlers) {
           handler(event);
         }
@@ -151,7 +201,10 @@ export class KanbanWebSocket {
 
     this.ws.onclose = () => {
       if (!this.stopped) {
+        this.setStatus('reconnecting');
         this.scheduleReconnect();
+      } else {
+        this.setStatus('disconnected');
       }
     };
 
@@ -179,10 +232,14 @@ export class KanbanWebSocket {
   }
 }
 
-/** Get the WebSocket URL for kanban events. */
+/**
+ * Get the WebSocket URL for kanban events.
+ * Includes JWT token as query param (WebSocket 无法设置自定义 header).
+ */
 export function getKanbanWsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/chat/api/kanban/events`;
+  const token = getAuthToken() ?? '';
+  return `${proto}//${window.location.host}${API_BASE}/events?token=${encodeURIComponent(token)}`;
 }
 
 // ─── Status Derivation ─────────────────────────────────────────────
