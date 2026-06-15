@@ -46,14 +46,14 @@ async fn setup_kanban_db() -> SqlitePool {
             completed_at INTEGER
         );
 
-        CREATE TABLE IF NOT EXISTS comments (
+        CREATE TABLE IF NOT EXISTS task_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id TEXT NOT NULL,
             body TEXT NOT NULL,
             created_at INTEGER NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS events (
+        CREATE TABLE IF NOT EXISTS task_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id TEXT NOT NULL,
             kind TEXT NOT NULL,
@@ -62,7 +62,7 @@ async fn setup_kanban_db() -> SqlitePool {
             run_id INTEGER
         );
 
-        CREATE TABLE IF NOT EXISTS runs (
+        CREATE TABLE IF NOT EXISTS task_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id TEXT NOT NULL,
             profile TEXT NOT NULL,
@@ -154,7 +154,7 @@ async fn insert_kanban_task(
 /// 插入测试事件到 kanban DB
 async fn insert_kanban_event(pool: &SqlitePool, task_id: &str, kind: &str) -> i64 {
     let result = sqlx::query(
-        "INSERT INTO events (task_id, kind, created_at) VALUES (?, ?, strftime('%s', 'now'))",
+        "INSERT INTO task_events (task_id, kind, created_at) VALUES (?, ?, strftime('%s', 'now'))",
     )
     .bind(task_id)
     .bind(kind)
@@ -168,7 +168,7 @@ async fn insert_kanban_event(pool: &SqlitePool, task_id: &str, kind: &str) -> i6
 /// 插入测试评论到 kanban DB
 async fn insert_kanban_comment(pool: &SqlitePool, task_id: &str, body: &str) {
     sqlx::query(
-        "INSERT INTO comments (task_id, body, created_at) VALUES (?, ?, strftime('%s', 'now'))",
+        "INSERT INTO task_comments (task_id, body, created_at) VALUES (?, ?, strftime('%s', 'now'))",
     )
     .bind(task_id)
     .bind(body)

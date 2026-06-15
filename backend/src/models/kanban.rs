@@ -13,14 +13,24 @@ pub struct KanbanTask {
     pub id: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub body: Option<String>,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assignee: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub priority: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub tenant: Option<String>,
+    pub priority: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+    pub created_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
