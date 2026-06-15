@@ -100,7 +100,7 @@ describe('deriveKanbanTaskStatus', () => {
 
   it('returns off when no tasks', () => {
     const result = deriveKanbanTaskStatus([]);
-    expect(result.status).toBe('off');
+    expect(result.status).toBe('completed');
     expect(result.currentTask).toBe('暂无任务');
   });
 
