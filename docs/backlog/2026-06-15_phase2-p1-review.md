@@ -27,7 +27,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 ```
 
 **优先级**: P0 — 编译不通过，无法部署
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-15（kanban.rs 改用 CLI poll + HashMap 快照方案，无需这两个方法）
 
 ---
 
@@ -42,7 +42,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 - b) 在 ws_events handler 里手动从 query param 提取 token 并验证（decode JWT + 黑名单 + tenant 查询）
 
 **优先级**: P0 — 安全漏洞 + 功能不可用
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-15（ws_events 手动验证 JWT，kanban_ws_routes 合并到主路由）
 
 ---
 
@@ -55,7 +55,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **修复建议**: 手动验证方案中必须加入黑名单检查。如果走方案(a)合并路由，则自动继承。
 
 **优先级**: P0 — 安全漏洞
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-15（ws_events:101-107 手动调用 is_token_blacklisted）
 
 ---
 
@@ -68,7 +68,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **修复建议**: 服务层返回结构化错误，handler 层统一转换为用户友好消息，原始错误用 tracing::error! 记录。
 
 **优先级**: P0 — 信息泄露
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-15（原始错误记日志，返回通用消息 "看板服务暂时不可用"）
 
 ---
 

@@ -106,6 +106,16 @@ pub async fn ws_events(
         return Err(AppError::Auth(AuthError::InvalidToken));
     }
 
+    // 🟡1: 检查账号是否被禁用（与 auth_middleware 逻辑一致）
+    let enabled: i32 = sqlx::query_scalar("SELECT enabled FROM users WHERE id = ?")
+        .bind(&claims.sub)
+        .fetch_optional(&state.pool)
+        .await?
+        .unwrap_or(0);
+    if enabled == 0 {
+        return Err(AppError::Auth(AuthError::AccountDisabled));
+    }
+
     // 确定 tenant
     let tenant_id = match query.tenant {
         Some(t) => {

@@ -6,6 +6,7 @@
 |------|------|
 | [auth-logout-design](2026-06-14_auth-logout-design.md) | 认证登出功能设计 |
 | [2026-06-15_account-disabled-design.md](2026-06-15_account-disabled-design.md) | 账户禁用功能设计 |
+| [2026-06-15_kanban-migration.md](../requirements/kanban-migration-plan.md) | Kanban 迁移方案（架构设计 + 接口定义 + 验收标准） |
 
 ## 1. 组件拆解
 

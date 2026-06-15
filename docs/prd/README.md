@@ -11,3 +11,4 @@
 | [2026-06-14_auth-login-register.md](2026-06-14_auth-login-register.md) | 2026-06-14 | 登录/注册功能 PRD |
 | [2026-06-14_auth-logout.md](2026-06-14_auth-logout.md) | 2026-06-14 | 登出功能 (Token 黑名单) PRD |
 | [2026-06-15_account-disabled.md](2026-06-15_account-disabled.md) | 2026-06-15 | 账户禁用功能 PRD |
+| [2026-06-15_kanban-migration.md](../requirements/kanban-migration-plan.md) | 2026-06-15 | Kanban 迁移方案（PRD + 改动清单 + 验收标准） |

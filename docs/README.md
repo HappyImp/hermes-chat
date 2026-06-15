@@ -58,6 +58,7 @@
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
 || [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（33 文件 / 265 测试全部通过） |
 || [test/2026-06-15_test-report.md](test/2026-06-15_test-report.md) | 2026-06-15 | 测试报告（33 文件 / 271 测试全部通过） |
+| [test/2026-06-15_backend-kanban-test-report.md](test/2026-06-15_backend-kanban-test-report.md) | 2026-06-15 | 后端 Kanban 模块测试报告（33 个测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
 
@@ -86,3 +87,4 @@
 | [backlog/2026-06-15_kanban-backend-review.md](backlog/2026-06-15_kanban-backend-review.md) | 2026-06-15 | Kanban 后端适配层审查（3🔴+3🟡+2🟢） |
 | [backlog/2026-06-15_phase2-p0-review.md](backlog/2026-06-15_phase2-p0-review.md) | 2026-06-15 | Phase 2 P0 审查 — KAN-205/207/208（1🔴+3🟡+3🟢） |
 | [backlog/2026-06-15_phase2-p1-review.md](backlog/2026-06-15_phase2-p1-review.md) | 2026-06-15 | Phase 2 P1 审查 — KAN-203/204/206（4🔴+4🟡+3🟢） |
+| [backlog/2026-06-15_phase2-p1-review-v2.md](backlog/2026-06-15_phase2-p1-review-v2.md) | 2026-06-15 | Phase 2 P1 复审 — 4🔴已修复，剩余 1🟡安全+3🟡文档 |
