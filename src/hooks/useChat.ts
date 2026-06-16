@@ -3,7 +3,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
 import { renderMarkdown, generateId } from '@/utils';
 
-const API_URL = '/chat/v1/chat/completions';
+const API_URL = '/chat/api/chat/completions';
 const CHUNK_TIMEOUT_MS = 60_000;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 1_000;
