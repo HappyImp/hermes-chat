@@ -136,7 +136,7 @@ impl KanbanService {
 
         let task = task.ok_or_else(|| AppError::NotFound("任务不存在".to_string()))?;
 
-        // 验证 tenant 隔离：task.ttenant 存在时必须匹配
+        // 验证 tenant 隔离：task.tenant 存在时必须匹配
         if let Some(ref t) = task.tenant {
             if t != tenant_id {
                 return Err(AppError::Forbidden(

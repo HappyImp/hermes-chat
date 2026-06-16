@@ -4,10 +4,16 @@
 
 | 文档 | 说明 |
 |------|------|
+| [2026-06-14_auth-login-register-design.md](2026-06-14_auth-login-register-design.md) | 登录/注册功能设计 |
 | [auth-logout-design](2026-06-14_auth-logout-design.md) | 认证登出功能设计 |
+| [2026-06-14_employee-async-task-design.md](2026-06-14_employee-async-task-design.md) | F6 员工异步任务设计 |
+| [2026-06-14_employee-status-design.md](2026-06-14_employee-status-design.md) | 员工状态面板设计 |
+| [2026-06-14_pixel-office-design.md](2026-06-14_pixel-office-design.md) | 像素风办公室设计 |
+| [2026-06-14_rust-backend-account-system.md](2026-06-14_rust-backend-account-system.md) | Rust 后端 + 账户系统设计 |
 | [2026-06-15_account-disabled-design.md](2026-06-15_account-disabled-design.md) | 账户禁用功能设计 |
 | [2026-06-15_kanban-migration.md](../requirements/kanban-migration-plan.md) | Kanban 迁移方案（架构设计 + 接口定义 + 验收标准） |
 | [2026-06-15_websocket-realtime-update.md](2026-06-15_websocket-realtime-update.md) | KAN-304 WebSocket 实时更新设计 |
+| [admin-panel-design.md](admin-panel-design.md) | 后台管理面板设计 |
 
 ## 1. 组件拆解
 

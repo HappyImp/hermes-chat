@@ -13,3 +13,4 @@
 | [2026-06-15_account-disabled.md](2026-06-15_account-disabled.md) | 2026-06-15 | 账户禁用功能 PRD |
 | [prd/2026-06-15_kanban-migration.md](../requirements/kanban-migration-plan.md) | 2026-06-15 | Kanban 迁移方案（PRD + 改动清单 + 验收标准） |
 | [prd/2026-06-15_websocket-realtime-update.md](2026-06-15_websocket-realtime-update.md) | 2026-06-15 | KAN-304 WebSocket 实时更新 PRD |
+| [2026-06-14_rust-backend-account-system.md](2026-06-14_rust-backend-account-system.md) | 2026-06-14 | Rust 后端 + 账户系统 PRD |
