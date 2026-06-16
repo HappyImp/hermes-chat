@@ -4,6 +4,9 @@ import {
   deriveKanbanTaskStatus,
   groupKanbanTasksByEmployee,
   fetchKanbanTasks,
+  fetchKanbanTask,
+  fetchKanbanStats,
+  fetchKanbanEmployees,
   KanbanWebSocket,
   getKanbanWsUrl,
 } from '../kanban';
@@ -80,6 +83,22 @@ describe('deriveKanbanTaskStatus', () => {
     expect(result.runningCount).toBe(1);
   });
 
+  it('returns working when task is running', () => {
+    const tasks = [makeTask({ status: 'running', title: '开发功能' })];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('working');
+    expect(result.currentTask).toBe('开发功能');
+    expect(result.runningCount).toBe(1);
+  });
+
+  it('returns blocked when task is blocked', () => {
+    const tasks = [makeTask({ status: 'blocked', title: '等待审查' })];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('blocked');
+    expect(result.currentTask).toContain('阻塞');
+    expect(result.currentTask).toContain('等待审查');
+  });
+
   it('returns standby when tasks are pending (todo)', () => {
     const tasks = [
       makeTask({ status: 'todo', title: '任务A' }),
@@ -88,6 +107,13 @@ describe('deriveKanbanTaskStatus', () => {
     const result = deriveKanbanTaskStatus(tasks);
     expect(result.status).toBe('standby');
     expect(result.pendingCount).toBe(2);
+  });
+
+  it('returns standby when tasks are ready', () => {
+    const tasks = [makeTask({ status: 'ready', title: '准备中' })];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('standby');
+    expect(result.pendingCount).toBe(1);
   });
 
   it('returns completed when all tasks are done', () => {
@@ -101,7 +127,7 @@ describe('deriveKanbanTaskStatus', () => {
     expect(result.currentTask).toContain('已完成');
   });
 
-  it('returns off when no tasks', () => {
+  it('returns completed when no tasks', () => {
     const result = deriveKanbanTaskStatus([]);
     expect(result.status).toBe('completed');
     expect(result.currentTask).toBe('暂无任务');
@@ -115,6 +141,26 @@ describe('deriveKanbanTaskStatus', () => {
     const result = deriveKanbanTaskStatus(tasks);
     expect(result.status).toBe('working');
     expect(result.currentTask).toBe('进行中');
+  });
+
+  it('running takes priority over blocked', () => {
+    const tasks = [
+      makeTask({ status: 'blocked', title: '阻塞任务', id: 't_1' }),
+      makeTask({ status: 'running', title: '运行中', id: 't_2' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('working');
+    expect(result.currentTask).toBe('运行中');
+  });
+
+  it('blocked takes priority over todo', () => {
+    const tasks = [
+      makeTask({ status: 'todo', title: '待办任务', id: 't_1' }),
+      makeTask({ status: 'blocked', title: '阻塞任务', id: 't_2' }),
+    ];
+    const result = deriveKanbanTaskStatus(tasks);
+    expect(result.status).toBe('blocked');
+    expect(result.currentTask).toContain('阻塞');
   });
 
   it('counts all categories correctly', () => {
@@ -200,6 +246,138 @@ describe('fetchKanbanTasks', () => {
   });
 });
 
+describe('fetchKanbanTask', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns task on success', async () => {
+    const mockTask = makeTask({ id: 't_abc', title: '详情任务' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockTask), { status: 200 }),
+    );
+    const task = await fetchKanbanTask('t_abc');
+    expect(task).not.toBeNull();
+    expect(task!.id).toBe('t_abc');
+    expect(task!.title).toBe('详情任务');
+  });
+
+  it('encodes task id in URL', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(makeTask()), { status: 200 }),
+    );
+    await fetchKanbanTask('t/with/slash');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('t/with/slash')),
+      expect.anything(),
+    );
+  });
+
+  it('returns null on non-200 response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Not Found', { status: 404 }),
+    );
+    const task = await fetchKanbanTask('t_missing');
+    expect(task).toBeNull();
+  });
+
+  it('returns null on network error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    );
+    const task = await fetchKanbanTask('t_err');
+    expect(task).toBeNull();
+  });
+});
+
+describe('fetchKanbanStats', () => {
+  const fallback = { total: 0, doing: 0, done: 0, pending: 0 };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('extracts stats from { stats: {...} } response', async () => {
+    const mockStats = { total: 10, doing: 3, done: 5, pending: 2 };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ stats: mockStats }), { status: 200 }),
+    );
+    const stats = await fetchKanbanStats();
+    expect(stats).toEqual(mockStats);
+  });
+
+  it('handles flat stats response (no wrapper)', async () => {
+    const mockStats = { total: 5, doing: 1, done: 3, pending: 1 };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockStats), { status: 200 }),
+    );
+    const stats = await fetchKanbanStats();
+    expect(stats).toEqual(mockStats);
+  });
+
+  it('returns fallback on non-200 response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Server Error', { status: 500 }),
+    );
+    const stats = await fetchKanbanStats();
+    expect(stats).toEqual(fallback);
+  });
+
+  it('returns fallback on network error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    );
+    const stats = await fetchKanbanStats();
+    expect(stats).toEqual(fallback);
+  });
+});
+
+describe('fetchKanbanEmployees', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns employees on success', async () => {
+    const mockEmployees = [
+      { name: '404', role: 'coder', avatar: '🤖', status: 'working', currentTask: '写代码', tasks: [] },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockEmployees), { status: 200 }),
+    );
+    const employees = await fetchKanbanEmployees();
+    expect(employees).toHaveLength(1);
+    expect(employees[0].name).toBe('404');
+  });
+
+  it('returns employees from { employees: [...] } format', async () => {
+    const mockEmployees = [
+      { name: '裁判君', role: 'reviewer', avatar: '👨‍⚖️', status: 'standby', currentTask: '待命', tasks: [] },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ employees: mockEmployees }), { status: 200 }),
+    );
+    const employees = await fetchKanbanEmployees();
+    expect(employees).toHaveLength(1);
+    expect(employees[0].name).toBe('裁判君');
+  });
+
+  it('returns empty array on non-200 response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Unauthorized', { status: 401 }),
+    );
+    const employees = await fetchKanbanEmployees();
+    expect(employees).toEqual([]);
+  });
+
+  it('returns empty array on network error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    );
+    const employees = await fetchKanbanEmployees();
+    expect(employees).toEqual([]);
+  });
+});
+
 describe('KanbanWebSocket', () => {
   let mockWs: {
     onopen: (() => void) | null;
@@ -263,6 +441,13 @@ describe('KanbanWebSocket', () => {
     expect(ws.connected).toBe(true);
   });
 
+  it('connectionStatus alias matches status', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    expect(ws.connectionStatus).toBe('disconnected');
+    ws.connect();
+    expect(ws.connectionStatus).toBe('connecting');
+  });
+
   it('parses and dispatches events', () => {
     const ws = new KanbanWebSocket('ws://localhost:3000/events');
     const events: unknown[] = [];
@@ -297,23 +482,21 @@ describe('KanbanWebSocket', () => {
     expect(events[0].type).toBe('task_claimed');
   });
 
-  it('dispatches heartbeat events', () => {
+  it('dispatches heartbeat events (no task_id)', () => {
     const ws = new KanbanWebSocket('ws://localhost:3000/events');
     const events: KanbanWsEvent[] = [];
     ws.on((e) => events.push(e));
 
     ws.connect();
     mockWs.onopen?.();
+    // 后端只发 { type: "heartbeat" }，无 task_id
     mockWs.onmessage?.({
-      data: JSON.stringify({
-        type: 'heartbeat',
-        task_id: '',
-        task: { id: '', title: '', status: '', assignee: '', priority: '0' },
-      }),
+      data: JSON.stringify({ type: 'heartbeat' }),
     });
 
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('heartbeat');
+    expect(events[0].task_id).toBeUndefined();
   });
 
   it('updates lastMessageTime on message', () => {
@@ -386,6 +569,101 @@ describe('KanbanWebSocket', () => {
     unsub();
     mockWs.onmessage?.({ data: JSON.stringify({ type: 'task_created', task_id: 't_2' }) });
     expect(events).toHaveLength(1); // No new events
+  });
+
+  it('dispatches task_deleted events', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events: KanbanWsEvent[] = [];
+    ws.on((e) => events.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({
+      data: JSON.stringify({
+        type: 'task_deleted',
+        task_id: 't_1',
+      }),
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('task_deleted');
+    expect(events[0].task_id).toBe('t_1');
+  });
+
+  it('fires error handlers on onerror', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const errors: string[] = [];
+    ws.onError((msg) => errors.push(msg));
+
+    ws.connect();
+    mockWs.onerror?.();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBe('WebSocket 连接错误');
+  });
+
+  it('onError unsubscribe works', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const errors: string[] = [];
+    const unsub = ws.onError((msg) => errors.push(msg));
+
+    ws.connect();
+    mockWs.onerror?.();
+    expect(errors).toHaveLength(1);
+
+    unsub();
+    // Trigger another error via reconnect
+    mockWs.onclose?.();
+    vi.advanceTimersByTime(1000);
+    mockWs.onerror?.();
+    expect(errors).toHaveLength(1); // No new errors
+  });
+
+  it('handles multiple handlers', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const events1: KanbanWsEvent[] = [];
+    const events2: KanbanWsEvent[] = [];
+    ws.on((e) => events1.push(e));
+    ws.on((e) => events2.push(e));
+
+    ws.connect();
+    mockWs.onopen?.();
+    mockWs.onmessage?.({
+      data: JSON.stringify({ type: 'task_created', task_id: 't_1' }),
+    });
+
+    expect(events1).toHaveLength(1);
+    expect(events2).toHaveLength(1);
+  });
+
+  it('handles multiple status change handlers', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const statuses1: string[] = [];
+    const statuses2: string[] = [];
+    ws.onStatusChange((s) => statuses1.push(s));
+    ws.onStatusChange((s) => statuses2.push(s));
+
+    ws.connect();
+    mockWs.readyState = 1;
+    mockWs.onopen?.();
+
+    expect(statuses1).toContain('connected');
+    expect(statuses2).toContain('connected');
+  });
+
+  it('status handler unsubscribe works', () => {
+    const ws = new KanbanWebSocket('ws://localhost:3000/events');
+    const statuses: string[] = [];
+    const unsub = ws.onStatusChange((s) => statuses.push(s));
+
+    ws.connect();
+    expect(statuses).toContain('connecting');
+
+    unsub();
+    mockWs.readyState = 1;
+    mockWs.onopen?.();
+    // Should not receive 'connected' after unsubscribe
+    expect(statuses.filter((s) => s === 'connected')).toHaveLength(0);
   });
 });
 

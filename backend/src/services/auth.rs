@@ -48,6 +48,7 @@ impl AuthService {
         struct CodeRow {
             id: String,
             allowed_employees: String,
+            allowed_tenants: Option<String>,
             max_uses: i32,
             used_count: i32,
             status: String,
@@ -55,7 +56,7 @@ impl AuthService {
         }
 
         let code_row = sqlx::query_as::<_, CodeRow>(
-            "SELECT id, allowed_employees, max_uses, used_count, status, expires_at FROM invitation_codes WHERE code = ?"
+            "SELECT id, allowed_employees, allowed_tenants, max_uses, used_count, status, expires_at FROM invitation_codes WHERE code = ?"
         )
         .bind(code_str)
         .fetch_optional(pool)
@@ -97,9 +98,15 @@ impl AuthService {
         .execute(&mut *tx)
         .await?;
 
-        // 继承授权码的员工权限
+        // 继承授权码的 tenant 映射（KAN-404: 优先使用 allowed_tenants）
         let employees: Vec<String> =
             serde_json::from_str(&code_row.allowed_employees).unwrap_or_default();
+
+        let tenants: Vec<String> = code_row
+            .allowed_tenants
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_else(|| vec!["default".to_string()]);
 
         for emp in &employees {
             let perm_id = Uuid::new_v4().to_string();
@@ -113,14 +120,17 @@ impl AuthService {
             .await?;
         }
 
-        // 同步 user_tenants 映射
-        sqlx::query(
-            "INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, 'default')",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(&id)
-        .execute(&mut *tx)
-        .await?;
+        // KAN-404: 创建 user_tenants 映射（从授权码继承）
+        for tenant_id in &tenants {
+            sqlx::query(
+                "INSERT OR IGNORE INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&id)
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await?;
+        }
 
         // 更新授权码状态
         let new_status = if code_row.used_count + 1 >= code_row.max_uses {

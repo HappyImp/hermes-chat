@@ -32,6 +32,48 @@ npm run build
 
 构建产物部署到 Nginx `/chat/` 路径。
 
+## API 端点
+
+### 认证
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/register` | 用户注册 |
+| POST | `/api/auth/login` | 用户登录，返回 JWT |
+| POST | `/api/auth/logout` | 登出（Token 加入黑名单） |
+
+### 会话
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/sessions` | 获取会话列表 |
+| POST | `/api/sessions` | 创建会话 |
+| DELETE | `/api/sessions/:id` | 删除会话 |
+
+### 聊天
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/v1/chat/completions` | 聊天补全（SSE 流式） |
+
+### Kanban 看板
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/kanban/tasks` | 任务列表（按 tenant 隔离） |
+| GET | `/api/kanban/tasks/:id` | 任务详情（含 comments + events） |
+| GET | `/api/kanban/stats` | 看板统计（todo/doing/done） |
+| GET | `/api/kanban/employees` | 员工列表（按 tenant 权限过滤） |
+| WS | `/api/kanban/events?token=<JWT>&tenant=<id>` | WebSocket 实时事件 |
+
+### 管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/admin/users` | 用户列表（管理员） |
+| DELETE | `/api/admin/users/:id` | 删除用户（管理员） |
+| GET | `/api/admin/audit-logs` | 审计日志（管理员） |
+
 ## 文档规范
 
 文档统一放在 `docs/` 目录下，结构如下：

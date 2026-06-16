@@ -13,6 +13,8 @@ export interface UseKanbanWebSocketReturn {
   lastEvent: KanbanWsEvent | null;
   /** 手动触发重连 */
   reconnect: () => void;
+  /** WebSocket 错误信息 */
+  wsError: string | null;
 }
 
 /**
@@ -29,6 +31,7 @@ export function useKanbanWebSocket(
 ): UseKanbanWebSocketReturn {
   const [wsStatus, setWsStatus] = useState<WsConnectionStatus>('disconnected');
   const [lastEvent, setLastEvent] = useState<KanbanWsEvent | null>(null);
+  const [wsError, setWsError] = useState<string | null>(null);
   const wsRef = useRef<KanbanWebSocket | null>(null);
   const onEventRef = useRef(onEvent);
 
@@ -52,6 +55,15 @@ export function useKanbanWebSocket(
     // 监听连接状态
     const unsubStatus = ws.onStatusChange((status) => {
       setWsStatus(status);
+      // 连接成功时清除错误
+      if (status === 'connected') {
+        setWsError(null);
+      }
+    });
+
+    // 监听错误
+    const unsubError = ws.onError((message) => {
+      setWsError(message);
     });
 
     // 监听事件
@@ -64,6 +76,7 @@ export function useKanbanWebSocket(
 
     return () => {
       unsubStatus();
+      unsubError();
       unsubEvent();
       ws.disconnect();
     };
@@ -79,5 +92,5 @@ export function useKanbanWebSocket(
     connect();
   }, [connect]);
 
-  return { wsStatus, lastEvent, reconnect };
+  return { wsStatus, lastEvent, reconnect, wsError };
 }

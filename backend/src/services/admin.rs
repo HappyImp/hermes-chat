@@ -6,6 +6,7 @@ use crate::errors::AppError;
 use crate::models::invitation_code::{
     CreateInvitationCode, InvitationCode, InvitationCodeResponse,
 };
+use crate::models::permission::TenantPermission;
 
 #[derive(Clone)]
 pub struct AdminService;
@@ -19,6 +20,91 @@ impl Default for AdminService {
 impl AdminService {
     pub fn new() -> Self {
         Self
+    }
+
+    // ==================== Tenant 管理 ====================
+
+    /// 列出系统中所有 tenant（去重）
+    pub async fn list_all_tenants(&self, pool: &DbPool) -> Result<Vec<String>, AppError> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT tenant_id FROM user_tenants ORDER BY tenant_id",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let mut tenants: Vec<String> = rows.into_iter().map(|(t,)| t).collect();
+
+        // 确保 default 始终存在
+        if !tenants.iter().any(|t| t == "default") {
+            tenants.insert(0, "default".to_string());
+        }
+
+        Ok(tenants)
+    }
+
+    /// 获取用户所属的 tenant 列表
+    pub async fn get_user_tenants(
+        &self,
+        pool: &DbPool,
+        user_id: &str,
+    ) -> Result<Vec<TenantPermission>, AppError> {
+        let rows: Vec<TenantPermission> = sqlx::query_as(
+            "SELECT id, user_id, tenant_id, created_at FROM user_tenants WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// 更新用户的 tenant 映射（整体替换）
+    pub async fn update_user_tenants(
+        &self,
+        pool: &DbPool,
+        operator_id: &str,
+        user_id: &str,
+        tenant_ids: Vec<String>,
+    ) -> Result<(), AppError> {
+        if tenant_ids.is_empty() {
+            return Err(AppError::BadRequest("至少分配一个 tenant".to_string()));
+        }
+
+        let mut tx = pool.begin().await?;
+
+        // 删除旧的 tenant 映射
+        sqlx::query("DELETE FROM user_tenants WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // 插入新的 tenant 映射
+        for tenant_id in &tenant_ids {
+            let id = Uuid::new_v4().to_string();
+            sqlx::query(
+                "INSERT INTO user_tenants (id, user_id, tenant_id) VALUES (?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(user_id)
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+
+        // 审计日志
+        self.log_audit(
+            pool,
+            operator_id,
+            "update_user_tenants",
+            "user",
+            Some(user_id),
+            Some(&serde_json::json!({ "tenants": tenant_ids }).to_string()),
+        )
+        .await?;
+
+        Ok(())
     }
 
     // ==================== 授权码管理 ====================
@@ -37,6 +123,13 @@ impl AdminService {
         let employees_json = serde_json::to_string(&input.allowed_employees)
             .map_err(|_| AppError::Internal("序列化员工列表失败".to_string()))?;
 
+        // KAN-404: tenant 映射
+        let tenants = input
+            .allowed_tenants
+            .unwrap_or_else(|| vec!["default".to_string()]);
+        let tenants_json = serde_json::to_string(&tenants)
+            .map_err(|_| AppError::Internal("序列化 tenant 列表失败".to_string()))?;
+
         let expires_at = input
             .expires_in_hours
             .map(|h| (Utc::now() + Duration::hours(h)).to_rfc3339());
@@ -49,12 +142,13 @@ impl AdminService {
             let code = Self::generate_code();
 
             sqlx::query(
-                "INSERT INTO invitation_codes (id, code, allowed_employees, max_uses, status, created_by, expires_at, note)
-                 VALUES (?, ?, ?, 1, 'active', ?, ?, ?)"
+                "INSERT INTO invitation_codes (id, code, allowed_employees, allowed_tenants, max_uses, status, created_by, expires_at, note)
+                 VALUES (?, ?, ?, ?, 1, 'active', ?, ?, ?)"
             )
             .bind(&id)
             .bind(&code)
             .bind(&employees_json)
+            .bind(&tenants_json)
             .bind(operator_id)
             .bind(&expires_at)
             .bind(&input.note)
@@ -71,7 +165,8 @@ impl AdminService {
                 Some(
                     &serde_json::json!({
                         "code": code,
-                        "allowed_employees": input.allowed_employees
+                        "allowed_employees": input.allowed_employees,
+                        "allowed_tenants": tenants
                     })
                     .to_string(),
                 ),
@@ -242,7 +337,7 @@ impl AdminService {
 
     // ==================== 用户管理 ====================
 
-    /// 用户列表（支持搜索和分页）— LEFT JOIN 优化，消除 N+1
+    /// 用户列表（支持搜索和分页）— 返回 tenant 映射而非员工权限
     pub async fn list_users(
         &self,
         pool: &DbPool,
@@ -264,23 +359,21 @@ impl AdminService {
                 .await?
         };
 
-        // 主查询：LEFT JOIN 授权码 + 聚合权限（一次查询搞定）
+        // 主查询：基本信息
         #[derive(sqlx::FromRow)]
-        struct UserWithDetails {
+        struct UserRow {
             id: String,
             username: String,
             role: String,
             enabled: i32,
             created_at: String,
             invitation_code: Option<String>,
-            allowed_employees: Option<String>, // JSON 聚合
         }
 
-        let users: Vec<UserWithDetails> = if search.is_empty() {
+        let users: Vec<UserRow> = if search.is_empty() {
             sqlx::query_as(r#"
                 SELECT u.id, u.username, u.role, u.enabled, u.created_at,
-                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code,
-                    (SELECT GROUP_CONCAT(p.employee) FROM permissions p WHERE p.user_id = u.id AND p.allowed = 1) AS allowed_employees
+                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code
                 FROM users u
                 ORDER BY u.created_at DESC LIMIT ? OFFSET ?
             "#)
@@ -289,8 +382,7 @@ impl AdminService {
         } else {
             sqlx::query_as(r#"
                 SELECT u.id, u.username, u.role, u.enabled, u.created_at,
-                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code,
-                    (SELECT GROUP_CONCAT(p.employee) FROM permissions p WHERE p.user_id = u.id AND p.allowed = 1) AS allowed_employees
+                    (SELECT ic.code FROM invitation_codes ic WHERE ic.used_by = u.id LIMIT 1) AS invitation_code
                 FROM users u
                 WHERE u.username LIKE ?
                 ORDER BY u.created_at DESC LIMIT ? OFFSET ?
@@ -299,17 +391,34 @@ impl AdminService {
             .fetch_all(pool).await?
         };
 
+        // 批量查询每个用户的 tenants（避免 N+1）
+        let user_ids: Vec<&str> = users.iter().map(|u| u.id.as_str()).collect();
+        let all_tenants: Vec<(String, String)> = if user_ids.is_empty() {
+            vec![]
+        } else {
+            let placeholders = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!(
+                "SELECT user_id, tenant_id FROM user_tenants WHERE user_id IN ({})",
+                placeholders
+            );
+            let mut query = sqlx::query_as::<_, (String, String)>(&sql);
+            for uid in &user_ids {
+                query = query.bind(uid);
+            }
+            query.fetch_all(pool).await?
+        };
+
+        // 按 user_id 分组
+        let mut tenant_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (uid, tid) in all_tenants {
+            tenant_map.entry(uid).or_default().push(tid);
+        }
+
         let user_list: Vec<serde_json::Value> = users
             .iter()
             .map(|u| {
-                let employees: Vec<String> = u
-                    .allowed_employees
-                    .as_deref()
-                    .unwrap_or("")
-                    .split(',')
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .collect();
+                let tenants = tenant_map.get(&u.id).cloned().unwrap_or_default();
                 serde_json::json!({
                     "id": u.id,
                     "username": u.username,
@@ -317,7 +426,7 @@ impl AdminService {
                     "enabled": u.enabled == 1,
                     "created_at": u.created_at,
                     "invitation_code": u.invitation_code,
-                    "allowed_employees": employees
+                    "tenants": tenants
                 })
             })
             .collect();
@@ -359,14 +468,15 @@ impl AdminService {
                 .fetch_optional(pool)
                 .await?;
 
-        let employees: Vec<serde_json::Value> = sqlx::query_as::<_, (String, String)>(
-            "SELECT employee, tenant FROM permissions WHERE user_id = ? AND allowed = 1",
+        // 查询用户所属 tenants
+        let tenants: Vec<String> = sqlx::query_as::<_, (String,)>(
+            "SELECT tenant_id FROM user_tenants WHERE user_id = ? ORDER BY tenant_id",
         )
         .bind(user_id)
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|(emp, tenant)| serde_json::json!({ "name": emp, "tenant": tenant }))
+        .map(|(t,)| t)
         .collect();
 
         let session_count: i64 = sqlx::query_scalar(
@@ -390,7 +500,7 @@ impl AdminService {
             "enabled": user.enabled == 1,
             "created_at": user.created_at,
             "invitation_code": invitation_code,
-            "allowed_employees": employees,
+            "tenants": tenants,
             "session_count": session_count,
             "last_active": last_active
         }))
@@ -525,6 +635,10 @@ impl AdminService {
             .execute(&mut *tx)
             .await?;
         sqlx::query("DELETE FROM permissions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM user_tenants WHERE user_id = ?")
             .bind(user_id)
             .execute(&mut *tx)
             .await?;

@@ -11,10 +11,8 @@ pub const DEFAULT_TENANT: &str = "default";
 
 /// Tenant 作用域提取器
 ///
-/// 从请求中提取 tenant 上下文（middleware 注入）：
-/// 1. 优先读取 `X-Tenant-ID` header
-/// 2. 回退到查询参数 `?tenant=xxx`
-/// 3. 最终回退到 user_tenants 表查询
+/// KAN-208: 从 extensions 中提取 tenant 上下文（由 tenant_middleware 注入）。
+/// **不**直接读取前端 header/query 参数——这些由 middleware 统一处理并验证访问权限后注入。
 ///
 /// 用法：
 /// ```ignore
@@ -59,55 +57,28 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // 优先从 header 读取
-        if let Some(tenant) = parts
-            .headers
-            .get("X-Tenant-ID")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-        {
-            if !is_valid_tenant_id(&tenant) {
-                return Err(AppError::BadRequest(
-                    "无效的 tenant ID，只允许字母、数字、下划线和连字符".to_string(),
-                ));
-            }
-            return Ok(TenantScope::new(tenant));
-        }
-
-        // 回退到查询参数
-        if let Some(query) = parts.uri.query() {
-            for pair in query.split('&') {
-                if let Some((key, value)) = pair.split_once('=') {
-                    if key == "tenant" && !value.is_empty() {
-                        let tenant = value.to_string();
-                        if !is_valid_tenant_id(&tenant) {
-                            return Err(AppError::BadRequest(
-                                "无效的 tenant ID，只允许字母、数字、下划线和连字符".to_string(),
-                            ));
-                        }
-                        return Ok(TenantScope::new(tenant));
-                    }
-                }
-            }
-        }
-
-        // 从 extensions 获取（middleware 已注入）
-        if let Some(scope) = parts.extensions.get::<TenantScope>() {
-            return Ok(scope.clone());
-        }
-
-        // 默认 tenant
-        Ok(TenantScope::default())
+        // KAN-208: 只从 extensions 读取（由 tenant_middleware 注入）
+        // 不直接读取前端 header/query 参数，确保 tenant 来源可信赖
+        parts
+            .extensions
+            .get::<TenantScope>()
+            .cloned()
+            .ok_or_else(|| {
+                tracing::warn!("TenantScope 未在 extensions 中找到，tenant_middleware 可能未启用");
+                AppError::Internal("缺少 tenant 上下文，请联系管理员".to_string())
+            })
     }
 }
 
-/// KAN-208: tenant 中间件
+/// KAN-208: tenant 中间件 — 后端强制注入，不信任前端参数
 ///
-/// 1. 从 header/query 读取显式 tenant ID
-/// 2. 若未指定，从 user_tenants 表推导
-/// 3. 验证用户有权访问该 tenant
-/// 4. 注入 TenantScope 到 extensions
+/// 安全流程：
+/// 1. 从 header/query 读取前端提供的 tenant ID（作为 hint，非信任源）
+/// 2. 若显式指定，验证格式 + 查询 user_tenants 表确认用户有权访问
+/// 3. 若未指定，从 user_tenants 表推导（LIMIT 1）
+/// 4. 注入 TenantScope 到 extensions — 后续 handler 仅从此处读取
+///
+/// 关键：TenantScope 提取器不再直接读取前端参数，只信任 middleware 注入的值
 pub async fn tenant_middleware(
     axum::extract::State(state): axum::extract::State<AppState>,
     mut req: axum::extract::Request,
@@ -174,6 +145,15 @@ pub fn is_valid_tenant_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http;
+
+    fn make_parts() -> http::request::Parts {
+        http::Request::builder()
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0
+    }
 
     #[test]
     fn test_default_tenant() {
@@ -202,5 +182,85 @@ mod tests {
         let scope = TenantScope::new("custom".to_string());
         assert_eq!(scope.as_str(), "custom");
         assert_eq!(scope.into_inner(), "custom");
+    }
+
+    // ==================== KAN-208: 安全测试 ====================
+
+    /// KAN-208: 验证 TenantScope 提取器不接受无 middleware 注入的请求
+    /// 旧实现会从 header/query 直读并返回 "default"，新实现必须返回错误
+    #[tokio::test]
+    async fn test_kan208_extractor_rejects_no_middleware_injection() {
+        let mut parts = make_parts();
+        // 不注入 TenantScope 到 extensions
+
+        let result = TenantScope::from_request_parts(&mut parts, &()).await;
+        assert!(
+            result.is_err(),
+            "KAN-208: 无 middleware 注入时应返回错误，不应回退到默认值"
+        );
+    }
+
+    /// KAN-208: 验证 TenantScope 提取器忽略 X-Tenant-ID header（不信任前端参数）
+    /// 旧实现会从 header 直读，新实现只信任 middleware 注入的值
+    #[tokio::test]
+    async fn test_kan208_extractor_ignores_header_when_no_injection() {
+        let mut parts = make_parts();
+        parts
+            .headers
+            .insert("X-Tenant-ID", "attacker-tenant".parse().unwrap());
+        // 不注入 TenantScope
+
+        let result = TenantScope::from_request_parts(&mut parts, &()).await;
+        assert!(
+            result.is_err(),
+            "KAN-208: 不应从 header 直接读取 tenant，即使 header 存在也应返回错误"
+        );
+    }
+
+    /// KAN-208: 验证 TenantScope 提取器忽略 query 参数（不信任前端参数）
+    #[tokio::test]
+    async fn test_kan208_extractor_ignores_query_when_no_injection() {
+        let mut parts = make_parts();
+        parts.uri = "http://localhost/api/kanban/tasks?tenant=attacker".parse().unwrap();
+        // 不注入 TenantScope
+
+        let result = TenantScope::from_request_parts(&mut parts, &()).await;
+        assert!(
+            result.is_err(),
+            "KAN-208: 不应从 query 参数直接读取 tenant，即使参数存在也应返回错误"
+        );
+    }
+
+    /// KAN-208: 验证 TenantScope 提取器接受 middleware 注入的值
+    #[tokio::test]
+    async fn test_kan208_extractor_accepts_middleware_injection() {
+        let mut parts = make_parts();
+        parts
+            .extensions
+            .insert(TenantScope::new("injected-tenant".to_string()));
+
+        let result = TenantScope::from_request_parts(&mut parts, &()).await;
+        assert!(result.is_ok(), "middleware 注入的值应被接受");
+        assert_eq!(result.unwrap().as_str(), "injected-tenant");
+    }
+
+    /// KAN-208: 验证 middleware 注入的值优先级高于 header（header 被忽略）
+    #[tokio::test]
+    async fn test_kan208_injection_overrides_header() {
+        let mut parts = make_parts();
+        parts
+            .headers
+            .insert("X-Tenant-ID", "header-tenant".parse().unwrap());
+        parts
+            .extensions
+            .insert(TenantScope::new("middleware-tenant".to_string()));
+
+        let result = TenantScope::from_request_parts(&mut parts, &()).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().as_str(),
+            "middleware-tenant",
+            "middleware 注入值应优先于 header"
+        );
     }
 }

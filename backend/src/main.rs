@@ -114,6 +114,7 @@ async fn main() {
 
     let admin_routes = Router::new()
         .route("/dashboard", get(handlers::admin::dashboard))
+        .route("/tenants", get(handlers::admin::list_tenants))
         .route(
             "/invitation-codes",
             post(handlers::admin::create_invitation_codes),
@@ -135,6 +136,10 @@ async fn main() {
         .route(
             "/users/:id/permissions",
             put(handlers::admin::update_user_permissions),
+        )
+        .route(
+            "/users/:id/tenants",
+            put(handlers::admin::update_user_tenants),
         )
         .route(
             "/users/:id/toggle-status",

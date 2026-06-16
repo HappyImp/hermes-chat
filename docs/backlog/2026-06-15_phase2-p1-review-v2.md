@@ -93,7 +93,7 @@ if enabled == 0 {
 **修复建议**: 用 `tokio::time::timeout(Duration::from_secs(30), ...)` 包裹。
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（用 tokio::time::timeout 包裹 spawn_blocking，超时 30 秒）
 
 ---
 
@@ -106,7 +106,7 @@ if enabled == 0 {
 **修复建议**: 提取为常量 `const WS_POLL_INTERVAL_SECS: u64 = 5;` 或从配置读取。
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（提取 WS_POLL_INTERVAL_SECS / WS_HEARTBEAT_INTERVAL_SECS 常量）
 
 ---
 
@@ -119,7 +119,7 @@ if enabled == 0 {
 **修复建议**: 添加 AtomicUsize 计数器或 Semaphore 限制并发连接。
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（AtomicUsize 全局计数 + WS_MAX_CONNECTIONS=100 上限 + ConnectionGuard 自动清理）
 
 ---
 

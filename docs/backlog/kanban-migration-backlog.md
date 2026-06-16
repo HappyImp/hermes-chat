@@ -26,15 +26,15 @@
 ### Phase 3：前端迁移（2-3天）
 - [ ] KAN-301：新增 kanban API 模块 src/api/kanban.ts
 - [ ] KAN-302：扩展 Employee 类型（支持 kanban 状态）
-- [ ] KAN-303：改造 useEmployeeStatus hook
-- [ ] KAN-304：实现 WebSocket 实时更新
+- [x] KAN-303：改造 useEmployeeStatus hook ✅ 2026-06-16
+- [x] KAN-304：实现 WebSocket 实时更新 ✅ 2026-06-16
 - [ ] KAN-305：更新 EmployeeStatus 组件
 - [ ] KAN-306：更新 EmployeeCard 组件
 
 ### Phase 4：切换与清理（1周）
 - [ ] KAN-401：并行运行验证（flow-gate + kanban）
 - [ ] KAN-402：废弃 flow-gate plugin
-- [ ] KAN-403：清理旧代码（cronJobs.ts、EMPLOYEE_META、active.json）
+- [x] KAN-403：清理旧代码（cronJobs.ts、EMPLOYEE_META、active.json） ✅ 2026-06-16
 - [ ] KAN-404：更新管理后台（tenant 映射）
 
 ## 进行中 🔄

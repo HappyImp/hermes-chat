@@ -83,7 +83,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **修复建议**: 添加 `--tenant` 参数。
 
 **优先级**: P1
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（get_stats 已用 SQL + tenant 过滤，非 CLI 方式）
 
 ---
 
@@ -96,7 +96,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **修复建议**: 确认业务逻辑。若所有任务都应有 tenant，null 应视为异常。
 
 **优先级**: P1
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（null tenant 任务拒绝访问，返回 403 "任务未分配 tenant"）
 
 ---
 
@@ -107,7 +107,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **问题**: kanban 迁移方案未在 prd/ 和 design/ 索引中收录。
 
 **优先级**: P1
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（prd/README.md 和 design/README.md 已收录 kanban-migration-plan.md）
 
 ---
 
@@ -118,7 +118,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **问题**: 新增端点未文档化。
 
 **优先级**: P1
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（README.md 新增完整 API 端点表，含认证/会话/聊天/Kanban/管理）
 
 ---
 
@@ -129,7 +129,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **文件**: `backend/src/services/kanban.rs:47`
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（tokio::time::timeout 30s 包裹 spawn_blocking）
 
 ---
 
@@ -138,7 +138,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **文件**: `backend/src/handlers/kanban.rs:81`
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（WS_POLL_INTERVAL_SECS / WS_HEARTBEAT_INTERVAL_SECS 常量）
 
 ---
 
@@ -147,7 +147,7 @@ pub async fn poll_new_events(&self, tenant_id: &str, after_id: i64) -> Result<Ve
 **文件**: `backend/src/handlers/kanban.rs:78-127`
 
 **优先级**: P3
-**修复记录**: 待修复
+**修复记录**: ✅ 已修复 2026-06-16（AtomicUsize + WS_MAX_CONNECTIONS=100 + ConnectionGuard）
 
 ---
 

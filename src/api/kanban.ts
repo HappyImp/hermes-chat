@@ -7,7 +7,7 @@ const API_BASE = '/chat/api/kanban';
 
 /** Employee's kanban-derived status summary. */
 export interface EmployeeKanbanStatus {
-  status: 'working' | 'standby' | 'off' | 'completed';
+  status: 'working' | 'standby' | 'off' | 'completed' | 'blocked';
   currentTask: string;
   pendingCount: number;
   completedCount: number;
@@ -45,14 +45,17 @@ export async function fetchKanbanTask(id: string): Promise<KanbanTask | null> {
 
 /** 获取 kanban 统计数据 */
 export async function fetchKanbanStats(): Promise<KanbanStats> {
+  const fallback: KanbanStats = { total: 0, doing: 0, done: 0, pending: 0 };
   try {
     const res = await fetch(`${API_BASE}/stats`, {
       headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) return { total: 0, doing: 0, done: 0, pending: 0 };
-    return await res.json();
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    // 后端返回 { stats: { ... } }，提取 stats 字段
+    return data.stats ?? data ?? fallback;
   } catch {
-    return { total: 0, doing: 0, done: 0, pending: 0 };
+    return fallback;
   }
 }
 
@@ -79,16 +82,22 @@ export async function fetchKanbanEmployees(): Promise<Employee[]> {
  * - task_claimed: 任务被认领
  * - heartbeat: 心跳（仅更新时间戳，不刷新状态）
  */
-export type KanbanWsEventType = 'task_created' | 'task_changed' | 'task_claimed' | 'heartbeat';
+export type KanbanWsEventType = 'task_created' | 'task_changed' | 'task_claimed' | 'task_deleted' | 'heartbeat';
 
 export interface KanbanWsEvent {
   type: KanbanWsEventType;
-  task_id: string;
-  task: KanbanTask;
+  /** task_created / task_changed / task_claimed / task_deleted 有值，heartbeat 无此字段 */
+  task_id?: string;
+  /** task_created / task_changed / task_claimed 时有值，task_deleted / heartbeat 无此字段 */
+  task?: KanbanTask;
   /** 仅 task_changed 有 */
   old_status?: string;
   /** 仅 task_changed 有 */
   new_status?: string;
+  /** 仅 task_claimed 有 */
+  old_assignee?: string;
+  /** 仅 task_claimed 有 */
+  new_assignee?: string;
 }
 
 type WsEventHandler = (event: KanbanWsEvent) => void;
@@ -97,12 +106,14 @@ type WsEventHandler = (event: KanbanWsEvent) => void;
 export type WsConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
 type StatusHandler = (status: WsConnectionStatus) => void;
+type ErrorHandler = (message: string) => void;
 
 /** 指数退避重连的 WebSocket 客户端 */
 export class KanbanWebSocket {
   private ws: WebSocket | null = null;
   private handlers = new Set<WsEventHandler>();
   private statusHandlers = new Set<StatusHandler>();
+  private errorHandlers = new Set<ErrorHandler>();
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30_000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,6 +133,12 @@ export class KanbanWebSocket {
   onStatusChange(handler: StatusHandler): () => void {
     this.statusHandlers.add(handler);
     return () => this.statusHandlers.delete(handler);
+  }
+
+  /** 注册错误处理器 */
+  onError(handler: ErrorHandler): () => void {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
   }
 
   /** 当前连接状态 */
@@ -210,6 +227,9 @@ export class KanbanWebSocket {
 
     this.ws.onerror = () => {
       // onclose 会紧随其后触发，在那里处理重连
+      for (const handler of this.errorHandlers) {
+        handler('WebSocket 连接错误');
+      }
     };
   }
 
@@ -260,30 +280,42 @@ export function mapKanbanAssigneeToEmployee(assignee: string): string | null {
  * Derive an employee's status from their kanban tasks.
  *
  * Rules (priority order):
- * 1. Any task with status 'doing' → 'working' (show task title)
- * 2. Any task with status 'todo' → 'standby' (has pending work)
- * 3. Only 'done' tasks → 'completed'; no tasks → 'completed'
+ * 1. Any task with status 'running'/'doing' → 'working' (show task title)
+ * 2. Any task with status 'blocked' → 'blocked'
+ * 3. Any task with status 'todo'/'ready' → 'standby' (has pending work)
+ * 4. Only 'done' tasks → 'completed'; no tasks → 'completed'
  */
 export function deriveKanbanTaskStatus(tasks: KanbanTask[]): EmployeeKanbanStatus {
-  const doing = tasks.filter((t) => t.status === 'doing');
-  const todo = tasks.filter((t) => t.status === 'todo');
+  const running = tasks.filter((t) => t.status === 'running' || t.status === 'doing');
+  const blocked = tasks.filter((t) => t.status === 'blocked');
+  const pending = tasks.filter((t) => t.status === 'todo' || t.status === 'ready');
   const done = tasks.filter((t) => t.status === 'done');
 
-  if (doing.length > 0) {
+  if (running.length > 0) {
     return {
       status: 'working',
-      currentTask: doing[0].title,
-      pendingCount: todo.length,
+      currentTask: running[0].title,
+      pendingCount: pending.length,
       completedCount: done.length,
-      runningCount: doing.length,
+      runningCount: running.length,
     };
   }
 
-  if (todo.length > 0) {
+  if (blocked.length > 0) {
+    return {
+      status: 'blocked',
+      currentTask: `阻塞: ${blocked[0].title}`,
+      pendingCount: pending.length,
+      completedCount: done.length,
+      runningCount: 0,
+    };
+  }
+
+  if (pending.length > 0) {
     return {
       status: 'standby',
-      currentTask: `待处理: ${todo.length} 个任务`,
-      pendingCount: todo.length,
+      currentTask: `待处理: ${pending.length} 个任务`,
+      pendingCount: pending.length,
       completedCount: done.length,
       runningCount: 0,
     };

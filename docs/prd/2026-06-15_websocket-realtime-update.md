@@ -25,12 +25,11 @@
 
 | 事件类型 | 说明 | 处理方式 |
 |----------|------|----------|
-| task.created | 新任务创建 | 更新对应员工状态 |
-| task.updated | 任务更新 | 更新对应员工状态 |
-| task.completed | 任务完成 | 更新对应员工状态 |
-| task.deleted | 任务删除 | 更新对应员工状态 |
-| task.claimed | 任务被领取 | 更新对应员工状态（新增） |
-| heartbeat | 心跳保活 | 仅更新 lastMessageTime（新增） |
+| task_created | 新任务创建 | 更新对应员工状态 |
+| task_changed | 任务更新（含状态变更、重新分配） | 更新新旧 assignee 状态 |
+| task_claimed | 任务被认领 | 更新对应员工状态 |
+| task_deleted | 任务删除 | 从缓存移除，更新员工状态 |
+| heartbeat | 心跳保活 | 仅更新 lastMessageTime |
 
 ### 3.2 连接状态管理
 
@@ -74,7 +73,7 @@ VITE_USE_KANBAN≠true  → 保持现有 60s 轮询（行为不变）
 
 ## 5. 验收标准
 
-- [ ] `task.claimed` 和 `heartbeat` 事件正确解析
+- [ ] `task_claimed`、`task_deleted` 和 `heartbeat` 事件正确解析
 - [ ] 连接状态变化触发 `onStatusChange` 回调
 - [ ] `lastMessageTime` 在收到消息时更新
 - [ ] Feature flag 关闭时行为与现有逻辑完全一致

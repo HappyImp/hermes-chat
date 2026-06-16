@@ -6,6 +6,7 @@ import type { KanbanWsEvent, WsConnectionStatus } from '@/api/kanban';
 // Mock KanbanWebSocket class
 const mockOn = vi.fn();
 const mockOnStatusChange = vi.fn();
+const mockOnError = vi.fn();
 const mockConnect = vi.fn();
 const mockDisconnect = vi.fn();
 
@@ -13,6 +14,7 @@ vi.mock('@/api/kanban', () => ({
   KanbanWebSocket: vi.fn().mockImplementation(() => ({
     on: mockOn,
     onStatusChange: mockOnStatusChange,
+    onError: mockOnError,
     connect: mockConnect,
     disconnect: mockDisconnect,
     connected: false,
@@ -24,6 +26,7 @@ vi.mock('@/api/kanban', () => ({
 describe('useKanbanWebSocket', () => {
   let eventHandler: (event: KanbanWsEvent) => void;
   let statusHandler: (status: WsConnectionStatus) => void;
+  let errorHandler: (message: string) => void;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,6 +39,11 @@ describe('useKanbanWebSocket', () => {
 
     mockOnStatusChange.mockImplementation((handler: (status: WsConnectionStatus) => void) => {
       statusHandler = handler;
+      return vi.fn(); // unsubscribe
+    });
+
+    mockOnError.mockImplementation((handler: (message: string) => void) => {
+      errorHandler = handler;
       return vi.fn(); // unsubscribe
     });
   });
@@ -55,6 +63,7 @@ describe('useKanbanWebSocket', () => {
     renderHook(() => useKanbanWebSocket());
     expect(mockOn).toHaveBeenCalledTimes(1);
     expect(mockOnStatusChange).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledTimes(1);
   });
 
   it('calls onEvent callback when event received', () => {
@@ -139,5 +148,38 @@ describe('useKanbanWebSocket', () => {
     expect(mockOn).toHaveBeenCalledTimes(1);
     const unsubscribe = mockOn.mock.results[0].value;
     expect(unsubscribe).toBeDefined();
+  });
+
+  it('sets wsError when error handler fires', () => {
+    const { result } = renderHook(() => useKanbanWebSocket());
+
+    expect(result.current.wsError).toBeNull();
+
+    act(() => {
+      errorHandler('WebSocket 连接错误');
+    });
+
+    expect(result.current.wsError).toBe('WebSocket 连接错误');
+  });
+
+  it('clears wsError when connection becomes connected', () => {
+    const { result } = renderHook(() => useKanbanWebSocket());
+
+    // First set an error
+    act(() => {
+      errorHandler('WebSocket 连接错误');
+    });
+    expect(result.current.wsError).toBe('WebSocket 连接错误');
+
+    // Then connect successfully
+    act(() => {
+      statusHandler('connected');
+    });
+    expect(result.current.wsError).toBeNull();
+  });
+
+  it('initializes with wsError as null', () => {
+    const { result } = renderHook(() => useKanbanWebSocket());
+    expect(result.current.wsError).toBeNull();
   });
 });

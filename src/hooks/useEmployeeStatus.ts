@@ -1,13 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Employee } from '@/types/employee';
 import {
-  fetchCronJobs,
-  deriveEmployeeStatus,
-  fetchActiveEmployees,
-  checkProcessAlive,
-} from '@/api/cronJobs';
-import type { CronJob, ActiveEmployeeEntry } from '@/api/cronJobs';
-import {
   fetchKanbanTasks,
   groupKanbanTasksByEmployee,
   deriveKanbanTaskStatus,
@@ -15,15 +8,21 @@ import {
 } from '@/api/kanban';
 import type { KanbanTask } from '@/types/employee';
 import type { KanbanWsEvent, WsConnectionStatus } from '@/api/kanban';
-import { EMPLOYEE_META, resolveCronJobName } from '@/config/employeeMapping';
 import { useKanbanWebSocket } from './useKanbanWebSocket';
 
-/** Default employee metadata (role, avatar, tasks) for known employees */
-// EMPLOYEE_META now imported from @/config/employeeMapping
+/** 员工基础元数据（仅用于默认头像/角色，不再从 cron/active.json 获取状态） */
+const EMPLOYEE_DEFAULTS: Record<string, { role: string; avatar: string; tasks: string[] }> = {
+  '老财': { role: 'AI操盘手', avatar: '💰', tasks: ['盘前研判', '开盘异动', '午盘复盘', '尾盘异动', '每晚复盘'] },
+  '铁壳': { role: 'AI运维工程师', avatar: '🤖', tasks: ['每日日报', '运维护航'] },
+  '小K': { role: 'AI情报员', avatar: '🔍', tasks: ['每日早报'] },
+  '404': { role: 'AI开发工程师', avatar: '💻', tasks: ['每日日报', '开发任务'] },
+  '裁判君': { role: 'AI审查官', avatar: '⚖️', tasks: ['按需审查'] },
+  'Ditto': { role: 'AI测试工程师', avatar: '🧪', tasks: ['线上测试'] },
+};
 
 /** Create a default employee object for a given name */
 export function createDefaultEmployee(name: string): Employee {
-  const meta = EMPLOYEE_META[name as keyof typeof EMPLOYEE_META];
+  const meta = EMPLOYEE_DEFAULTS[name];
   if (meta) {
     return {
       name,
@@ -44,99 +43,13 @@ export function createDefaultEmployee(name: string): Employee {
   };
 }
 
-export function groupJobsByEmployee(jobs: CronJob[]): Map<string, CronJob[]> {
-  const grouped = new Map<string, CronJob[]>();
-  for (const job of jobs) {
-    const employeeName = resolveCronJobName(job.name);
-    if (!employeeName) continue;
-    const existing = grouped.get(employeeName) ?? [];
-    existing.push(job);
-    grouped.set(employeeName, existing);
-  }
-  return grouped;
-}
-
-/** Extract unique employee names from cron jobs */
-export function extractEmployeesFromJobs(jobs: CronJob[]): string[] {
-  const names = new Set<string>();
-  for (const job of jobs) {
-    const name = resolveCronJobName(job.name);
-    if (name) names.add(name);
-  }
-  return Array.from(names);
-}
-
-/** Extract unique employee names from kanban tasks */
-export function extractEmployeesFromKanban(tasks: KanbanTask[]): string[] {
-  const grouped = groupKanbanTasksByEmployee(tasks);
-  return Array.from(grouped.keys());
-}
-
-export function mergeWithDefaults(defaults: Map<string, Employee>, jobs: CronJob[]): Employee[] {
-  const grouped = groupJobsByEmployee(jobs);
-  const result: Employee[] = [];
-
-  for (const [name, emp] of defaults) {
-    const empJobs = grouped.get(name);
-    if (!empJobs || empJobs.length === 0) {
-      result.push({ ...emp, status: 'off' as const, currentTask: '休息中' });
-    } else {
-      const { status, currentTask } = deriveEmployeeStatus(empJobs);
-      result.push({ ...emp, status, currentTask });
-    }
-  }
-
-  return result;
-}
-
-/**
- * Overlay active status from shell hooks onto cron-based employees.
- * Respects the active.json status field instead of blindly forcing 'working'.
- *
- * Rules:
- * 1. activeEntry.status === 'completed' → skip, keep original status
- * 2. activeEntry has pid but process is dead → mark completed
- * 3. activeEntry.status === 'working' (or no status field, process alive) → set working
- */
-export function mergeWithActive(
-  employees: Employee[],
-  active: Record<string, ActiveEmployeeEntry>,
-  pidAliveMap: Record<number, boolean> = {},
-): Employee[] {
-  const keys = Object.keys(active);
-  if (keys.length === 0) return employees;
-
-  return employees.map((emp) => {
-    const entry = active[emp.name];
-    if (!entry) return emp;
-
-    // Rule 1: already completed → don't override
-    if (entry.status === 'completed') return emp;
-
-    // Rule 2: has pid but process is dead → mark completed
-    if (entry.pid !== undefined && pidAliveMap[entry.pid] === false) {
-      return { ...emp, status: 'completed' as const, currentTask: entry.task };
-    }
-
-    // Rule 3: explicitly working or legacy entry without status → set working
-    if (entry.status === 'working' || entry.status === undefined) {
-      return { ...emp, status: 'working' as const, currentTask: entry.task };
-    }
-
-    return emp;
-  });
-}
-
 /**
  * Overlay kanban task data onto employees.
  *
- * Rules (lower priority than active entries, higher than cron-only):
+ * Rules:
  * 1. Has doing kanban task → set 'working' + task title
  * 2. Has todo kanban tasks → set 'standby' (if currently off)
  * 3. Always populate kanban count fields
- *
- * @param employees - employees with cron-based status already merged
- * @param kanbanTasksByEmployee - kanban tasks grouped by employee name
  */
 export function mergeWithKanban(
   employees: Employee[],
@@ -150,17 +63,16 @@ export function mergeWithKanban(
 
     const kanbanStatus = deriveKanbanTaskStatus(kanbanTasks);
 
-    // Build kanban field updates
     const kanbanFields: Partial<Employee> = {
       taskCount: kanbanTasks.length,
       kanbanTaskCount: kanbanTasks.length,
       kanbanRunningCount: kanbanStatus.runningCount,
       kanbanPendingCount: kanbanStatus.pendingCount,
       kanbanCompletedCount: kanbanStatus.completedCount,
-      kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : 'done',
+      kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : kanbanStatus.status === 'blocked' ? 'blocked' : 'done',
+      kanbanTasks,
     };
 
-    // Only upgrade status, never downgrade working → standby
     if (kanbanStatus.status === 'working' && emp.status !== 'working') {
       return {
         ...emp,
@@ -171,7 +83,15 @@ export function mergeWithKanban(
       };
     }
 
-    // Set standby if employee is off and kanban has pending work
+    if (kanbanStatus.status === 'blocked') {
+      return {
+        ...emp,
+        ...kanbanFields,
+        status: 'blocked' as const,
+        currentTask: kanbanStatus.currentTask,
+      };
+    }
+
     if (kanbanStatus.status === 'standby' && emp.status === 'off') {
       return {
         ...emp,
@@ -181,7 +101,6 @@ export function mergeWithKanban(
       };
     }
 
-    // Just attach kanban fields without changing status
     return { ...emp, ...kanbanFields };
   });
 }
@@ -197,182 +116,189 @@ export function useEmployeeStatus() {
 
   const useWs = import.meta.env.VITE_USE_KANBAN === 'true';
 
-  /** 从 REST API 全量拉取并合并状态 */
+  /** 从 kanban REST API 全量拉取并合并状态 */
   const refresh = useCallback(async () => {
     try {
-      const [jobs, active, kanbanTasks] = await Promise.all([
-        fetchCronJobs(),
-        fetchActiveEmployees(),
-        fetchKanbanTasks(),
-      ]);
-
-      // 缓存 kanban 任务，供 WebSocket 增量更新使用
+      const kanbanTasks = await fetchKanbanTasks();
       kanbanTasksRef.current = kanbanTasks;
 
-      // Always start with all known employees
+      // Build employee map from known defaults + kanban assignees
       const defaults = new Map<string, Employee>();
-      for (const name of Object.keys(EMPLOYEE_META)) {
+      for (const name of Object.keys(EMPLOYEE_DEFAULTS)) {
         defaults.set(name, createDefaultEmployee(name));
       }
 
-      // Add any additional employees from cron jobs, active entries, or kanban
-      for (const name of extractEmployeesFromJobs(jobs)) {
-        if (!defaults.has(name)) {
-          defaults.set(name, createDefaultEmployee(name));
-        }
-      }
-      for (const name of Object.keys(active)) {
-        if (!defaults.has(name)) {
-          defaults.set(name, createDefaultEmployee(name));
-        }
-      }
-      for (const name of extractEmployeesFromKanban(kanbanTasks)) {
-        if (!defaults.has(name)) {
-          defaults.set(name, createDefaultEmployee(name));
-        }
-      }
-
-      // Layer 1: cron job status
-      const merged = mergeWithDefaults(defaults, jobs);
-
-      // Layer 2: active entries (shell hooks, highest real-time priority)
-      const pids = Object.values(active)
-        .map((e) => e.pid)
-        .filter((pid): pid is number => pid !== undefined);
-      const aliveResults = pids.length > 0
-        ? await Promise.all(pids.map(checkProcessAlive))
-        : [];
-      const pidAliveMap: Record<number, boolean> = {};
-      pids.forEach((pid, i) => { pidAliveMap[pid] = aliveResults[i]; });
-
-      const withActive = mergeWithActive(merged, active, pidAliveMap);
-
-      // Layer 3: kanban task status (augments counts + upgrades if applicable)
+      // Add employees discovered from kanban tasks
       const kanbanGrouped = groupKanbanTasksByEmployee(kanbanTasks);
-      const withKanban = mergeWithKanban(withActive, kanbanGrouped);
+      for (const name of kanbanGrouped.keys()) {
+        if (!defaults.has(name)) {
+          defaults.set(name, createDefaultEmployee(name));
+        }
+      }
+
+      // Merge kanban status onto employees
+      const employeesArr = Array.from(defaults.values());
+      const withKanban = mergeWithKanban(employeesArr, kanbanGrouped);
 
       setEmployees(withKanban);
     } catch {
-      // On error, show all known employees as off
-      const fallback = Object.keys(EMPLOYEE_META).map(createDefaultEmployee);
+      const fallback = Object.keys(EMPLOYEE_DEFAULTS).map(createDefaultEmployee);
       setEmployees(fallback);
     }
     setLastUpdated(new Date());
   }, []);
 
-  /** 处理 WebSocket 事件 — 增量更新 kanban 任务缓存和员工状态 */
-  const handleWsEvent = useCallback((event: KanbanWsEvent) => {
-    const { task_id, task, type } = event;
+  /** 重算单个员工的 kanban 状态 */
+  const recalcKanbanStatus = useCallback((prev: Employee[], tasks: KanbanTask[], assignee: string): Employee[] => {
+    return prev.map((emp) => {
+      if (emp.name !== assignee) return emp;
 
-    // heartbeat 仅更新 lastWsUpdate，不刷新状态
-    if (type === 'heartbeat') {
-      setLastWsUpdate(new Date());
-      return;
-    }
-
-    // 更新本地 kanban 任务缓存
-    const tasks = kanbanTasksRef.current;
-    const idx = tasks.findIndex((t) => t.id === task_id);
-
-    if ((type === 'task_created' || type === 'task_claimed') && idx === -1) {
-      tasks.push(task);
-    } else if (type === 'task_changed' && idx !== -1) {
-      tasks[idx] = task;
-    }
-
-    // 增量更新员工状态（只重算受影响的员工）
-    setEmployees((prev) => {
-      const assignee = mapKanbanAssigneeToEmployee(task.assignee);
-      if (!assignee) return prev;
-
-      // 找到该员工的所有 kanban 任务
       const employeeTasks = tasks.filter(
         (t) => mapKanbanAssigneeToEmployee(t.assignee) === assignee,
       );
 
-      return prev.map((emp) => {
-        if (emp.name !== assignee) return emp;
+      const kanbanStatus = deriveKanbanTaskStatus(employeeTasks);
+      const kanbanFields: Partial<Employee> = {
+        taskCount: employeeTasks.length,
+        kanbanTaskCount: employeeTasks.length,
+        kanbanRunningCount: kanbanStatus.runningCount,
+        kanbanPendingCount: kanbanStatus.pendingCount,
+        kanbanCompletedCount: kanbanStatus.completedCount,
+        kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : kanbanStatus.status === 'blocked' ? 'blocked' : 'done',
+        kanbanTasks: employeeTasks,
+      };
 
-        const kanbanStatus = deriveKanbanTaskStatus(employeeTasks);
-        const kanbanFields: Partial<Employee> = {
-          taskCount: employeeTasks.length,
-          kanbanTaskCount: employeeTasks.length,
-          kanbanRunningCount: kanbanStatus.runningCount,
-          kanbanPendingCount: kanbanStatus.pendingCount,
-          kanbanCompletedCount: kanbanStatus.completedCount,
-          kanbanStatus: kanbanStatus.status === 'working' ? 'doing' : kanbanStatus.status === 'standby' ? 'todo' : 'done',
+      if (kanbanStatus.status === 'working' && emp.status !== 'working') {
+        return {
+          ...emp,
+          ...kanbanFields,
+          status: 'working' as const,
+          currentTask: kanbanStatus.currentTask,
+          currentTaskId: employeeTasks.find((t) => t.status === 'doing')?.id,
         };
+      }
 
-        // 升级规则与 mergeWithKanban 一致
-        if (kanbanStatus.status === 'working' && emp.status !== 'working') {
-          return {
-            ...emp,
-            ...kanbanFields,
-            status: 'working' as const,
-            currentTask: kanbanStatus.currentTask,
-            currentTaskId: employeeTasks.find((t) => t.status === 'doing')?.id,
-          };
-        }
+      if (kanbanStatus.status === 'blocked') {
+        return {
+          ...emp,
+          ...kanbanFields,
+          status: 'blocked' as const,
+          currentTask: kanbanStatus.currentTask,
+        };
+      }
 
-        if (kanbanStatus.status === 'standby' && emp.status === 'off') {
-          return {
-            ...emp,
-            ...kanbanFields,
-            status: 'standby' as const,
-            currentTask: kanbanStatus.currentTask,
-          };
-        }
+      if (kanbanStatus.status === 'standby' && emp.status === 'off') {
+        return {
+          ...emp,
+          ...kanbanFields,
+          status: 'standby' as const,
+          currentTask: kanbanStatus.currentTask,
+        };
+      }
 
-        return { ...emp, ...kanbanFields };
-      });
+      return { ...emp, ...kanbanFields };
     });
-
-    setLastWsUpdate(new Date());
   }, []);
 
-  // WebSocket 实时推送（仅当 VITE_USE_KANBAN=true）
-  const { wsStatus: currentWsStatus, reconnect } = useWs
-    ? useKanbanWebSocket(handleWsEvent)
-    : { wsStatus: 'polling' as const, reconnect: () => {} };
+  /** 处理 WebSocket 事件 — 增量更新 kanban 任务缓存和员工状态 */
+  const handleWsEvent = useCallback((event: KanbanWsEvent) => {
+      const { task_id, task, type } = event;
 
-  // 同步 WebSocket 状态 + 降级轮询逻辑
+      if (type === 'heartbeat') {
+        setLastWsUpdate(new Date());
+        return;
+      }
+
+      if (type === 'task_deleted') {
+        const deletedTask = kanbanTasksRef.current.find((t) => t.id === task_id);
+        kanbanTasksRef.current = kanbanTasksRef.current.filter((t) => t.id !== task_id);
+
+        if (deletedTask) {
+          const assignee = mapKanbanAssigneeToEmployee(deletedTask.assignee);
+          if (assignee) {
+            setEmployees((prev) => recalcKanbanStatus(prev, kanbanTasksRef.current, assignee));
+          }
+        }
+
+        setLastWsUpdate(new Date());
+        return;
+      }
+
+      if (!task) return;
+
+      const tasks = kanbanTasksRef.current;
+      const idx = tasks.findIndex((t) => t.id === task_id);
+      let oldAssignee: string | null = null;
+
+      if (type === 'task_created' && idx === -1) {
+        kanbanTasksRef.current = [...tasks, task];
+      } else if (type === 'task_claimed') {
+        if (idx !== -1) {
+          oldAssignee = mapKanbanAssigneeToEmployee(tasks[idx].assignee);
+        }
+        kanbanTasksRef.current = idx === -1
+          ? [...tasks, task]
+          : [...tasks.slice(0, idx), task, ...tasks.slice(idx + 1)];
+      } else if (type === 'task_changed' && idx !== -1) {
+        oldAssignee = mapKanbanAssigneeToEmployee(tasks[idx].assignee);
+        kanbanTasksRef.current = [...tasks.slice(0, idx), task, ...tasks.slice(idx + 1)];
+      }
+
+      const newAssignee = mapKanbanAssigneeToEmployee(task.assignee);
+
+      setEmployees((prev) => {
+        let result = prev;
+        if (newAssignee) {
+          result = recalcKanbanStatus(result, kanbanTasksRef.current, newAssignee);
+        }
+        if (oldAssignee && oldAssignee !== newAssignee) {
+          result = recalcKanbanStatus(result, kanbanTasksRef.current, oldAssignee);
+        }
+        return result;
+      });
+
+      setLastWsUpdate(new Date());
+    }, []);
+
+  const { wsStatus: currentWsStatus, reconnect, wsError: currentWsError } = useWs
+    ? useKanbanWebSocket(handleWsEvent)
+    : { wsStatus: 'polling' as const, reconnect: () => {}, wsError: null as string | null };
+
   useEffect(() => {
     if (!useWs) {
-      // 非 WS 模式：始终 polling
       setWsStatus('polling');
       return;
     }
-
     setWsStatus(currentWsStatus);
 
-    // WS 断线/重连中 → 启动 30s 降级轮询
     if (currentWsStatus === 'disconnected' || currentWsStatus === 'reconnecting') {
       if (!pollingTimerRef.current) {
         pollingTimerRef.current = setInterval(refresh, 30_000);
       }
     } else if (currentWsStatus === 'connected') {
-      // WS 恢复 → 停止降级轮询
       if (pollingTimerRef.current) {
         clearInterval(pollingTimerRef.current);
         pollingTimerRef.current = null;
       }
-      setWsError(null);
     }
   }, [currentWsStatus, useWs, refresh]);
 
-  // 初始全量拉取
+  useEffect(() => {
+    if (useWs) {
+      setWsError(currentWsError);
+    }
+  }, [currentWsError, useWs]);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // 非 WS 模式：保持 60s 轮询
   useEffect(() => {
     if (useWs) return;
     const timer = setInterval(refresh, 60_000);
     return () => clearInterval(timer);
   }, [refresh, useWs]);
 
-  // 页面重新可见或窗口获焦时，全量刷新一次（补偿 WebSocket 可能丢失的事件）
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -391,7 +317,6 @@ export function useEmployeeStatus() {
     };
   }, [refresh]);
 
-  // 清理降级轮询 timer
   useEffect(() => {
     return () => {
       if (pollingTimerRef.current) {

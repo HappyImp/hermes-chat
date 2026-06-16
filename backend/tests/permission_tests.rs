@@ -66,6 +66,7 @@ async fn create_code(pool: &SqlitePool, admin_id: &str, employees: Vec<&str>) ->
     let svc = AdminService::new();
     let input = CreateInvitationCode {
         allowed_employees: employees.into_iter().map(String::from).collect(),
+        allowed_tenants: None,
         count: 1,
         expires_in_hours: Some(24),
         note: Some("测试码".to_string()),
@@ -112,6 +113,7 @@ async fn test_create_code_empty_employees_rejected() {
 
     let input = CreateInvitationCode {
         allowed_employees: vec![],
+        allowed_tenants: None,
         count: 1,
         expires_in_hours: None,
         note: None,

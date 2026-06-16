@@ -37,7 +37,7 @@ location /chat/api/ {
 
 ---
 
-### 2. 后端未实现 `task_claimed` / `task_deleted` / `heartbeat` 事件
+### 2. 后端未实现 `task_claimed` / `task_deleted` / `heartbeat` 事件 ✅ 已修复
 
 **文件**: `backend/src/handlers/kanban.rs:149-223`
 **问题**: 后端 `handle_ws` 只检测 `task_created` 和 `task_changed`，但 PRD 验收标准要求：
@@ -51,9 +51,16 @@ location /chat/api/ {
 - 无心跳 → 前端 `lastMessageTime` 永远为 null，无法检测连接假死
 
 **修复方案**:
-- `task_claimed`: 在 snapshot diff 中检测 assignee 变更
-- `task_deleted`: 检测 snapshot 中存在但本轮消失的 task_id
-- `heartbeat`: 在 poll 间歇（如每 30s）发送一次 `{"type":"heartbeat"}`
+- `task_claimed`: 在 snapshot diff 中检测 assignee 变更 ✅
+- `task_deleted`: 检测 snapshot 中存在但本轮消失的 task_id ✅
+- `heartbeat`: 每 30s 发送 `{"type":"heartbeat"}` ✅
+
+**修复内容** (2026-06-16 by 404):
+- 快照从 `HashMap<String, String>` 扩展为 `HashMap<String, (String, String)>`，同时存 status 和 assignee
+- 状态变更 → `task_changed`，assignee 变更 → `task_claimed`，新任务 → `task_created`
+- 轮询结束后检测快照中存在但本轮消失的 task_id → `task_deleted`
+- 新增 `heartbeat_interval` 每 30s 发送心跳
+- 前端 `KanbanWsEventType` 补充 `task_deleted`，`handleWsEvent` 增加 `task_deleted` 处理分支
 
 **责任人**: 404
 
@@ -61,57 +68,61 @@ location /chat/api/ {
 
 ## 🟡 中等问题（建议修复）
 
-### 3. `wsError` 字段声明但从未赋值
+### 3. `wsError` 字段声明但从未赋值 ✅ 已修复
 
 **文件**: `src/hooks/useEmployeeStatus.ts:194`
 **问题**: PRD 要求暴露 `wsError: string | null`，代码声明了字段并返回，但整个 hook 中只有 `setWsError(null)` 的清除逻辑，从未 `setWsError("...")` 设置错误信息。`KanbanWebSocket.onerror` 回调也是空的。
 
-**建议**: 在 `KanbanWebSocket.onerror` 中记录错误信息，通过 `onStatusChange` 或新增 `onError` 回调传递给 hook。
+**修复**:
+- `KanbanWebSocket` 新增 `onError` 回调机制，`onerror` 时触发
+- `useKanbanWebSocket` 订阅 `onError`，暴露 `wsError` 字段
+- `useEmployeeStatus` 同步 `currentWsError` 到本地 `wsError` 状态
+- 连接成功时自动清除错误
 
 ---
 
-### 4. `handleWsEvent` 直接变异 ref 数组
+### 4. `handleWsEvent` 直接变异 ref 数组 ✅ 已修复
 
 **文件**: `src/hooks/useEmployeeStatus.ts:274-281`
 **问题**: `kanbanTasksRef.current` 是一个数组引用，`tasks.push(task)` 和 `tasks[idx] = task` 直接变异了这个数组。虽然在 ref 场景下不会导致 React 渲染问题，但违反了不可变数据最佳实践，且如果后续有人将此逻辑迁移到 state 中会踩坑。
 
-**建议**: 改为 `kanbanTasksRef.current = [...tasks, task]` 或 `[...tasks.slice(0, idx), task, ...tasks.slice(idx+1)]`。
+**修复**: 全部改为不可变更新：`[...tasks, task]`、`[...tasks.slice(0, idx), task, ...tasks.slice(idx+1)]`、`tasks.filter(...)`
 
 ---
 
-### 5. 任务删除事件前端未处理
+### 5. 任务删除事件前端未处理 ✅ 已修复
 
 **文件**: `src/hooks/useEmployeeStatus.ts:264-281`
 **问题**: `handleWsEvent` 没有 `task_deleted` 的处理分支。即使后端补发了 `task_deleted` 事件，前端也不会从缓存中移除已删除的任务。
 
-**建议**: 添加 `if (type === 'task_deleted' && idx !== -1) { tasks.splice(idx, 1); }`。
+**修复**: 添加 `task_deleted` 分支，用 `filter` 不可变移除任务，重算对应员工状态。同时 `KanbanWsEventType` 新增 `'task_deleted'`，`KanbanWsEvent.task` 改为可选。
 
 ---
 
-### 6. PRD 事件类型与实现不一致
+### 6. PRD 事件类型与实现不一致 ✅ 已修复
 
 **文件**: `docs/prd/2026-06-15_websocket-realtime-update.md:26-33`
 **问题**: PRD 写 `task.created` / `task.updated` / `task.completed` / `task.deleted`，实际后端发送 `task_created` / `task_changed` / `task_claimed`。设计文档已修正为实际类型，但 PRD 未同步。
 
-**建议**: 更新 PRD 事件类型表格与实际实现一致。
+**修复**: 更新 PRD 事件类型表格为实际类型（`task_created` / `task_changed` / `task_claimed` / `task_deleted` / `heartbeat`），验收标准同步更新。
 
 ---
 
-### 7. 测试报告过期
+### 7. 测试报告过期 ✅ 已修复
 
 **文件**: `docs/test/2026-06-15_test-report.md`
 **问题**: 报告记录 33 文件 / 271 测试，但当前实际为 37 文件 / 359 测试。新增 4 个测试文件（`useKanbanWebSocket.test.ts` 等）和 88 个测试用例未更新。
 
-**建议**: 更新测试报告，记录新增的 WebSocket 相关测试。
+**修复**: 更新测试报告为 37 文件 / 359 测试，新增 WebSocket 相关测试清单。
 
 ---
 
-### 8. 增量更新不处理任务重新分配
+### 8. 增量更新不处理任务重新分配 ✅ 已修复
 
 **文件**: `src/hooks/useEmployeeStatus.ts:264-331`
 **问题**: 如果一个任务的 assignee 从 A 改为 B，`handleWsEvent` 只更新 B 的状态，不会重新计算 A 的状态。A 的面板会残留已转移的任务数据直到下次 `refresh()`。
 
-**建议**: 在处理 `task_changed` 事件时，同时重新计算旧 assignee 的员工状态。
+**修复**: 在 `task_changed` 处理中，更新缓存前先记录 `oldAssignee`，更新后同时重算新旧两个 assignee 的员工状态。提取 `recalcKanbanStatus` 辅助函数避免重复代码。
 
 ---
 

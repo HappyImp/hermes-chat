@@ -306,13 +306,16 @@ async fn test_get_task_returns_detail_with_comments_and_events() {
     let svc = KanbanService::with_kanban_pool(kanban_pool);
     let detail = svc.get_task("t-detail", "board-x").await.unwrap();
 
-    // 验证 task 字段
+    // 验证 task 字段（完整字段，含 priority/workspace_kind 等）
     let task = detail.get("task").expect("应有 task 字段");
     assert_eq!(task["id"], "t-detail");
     assert_eq!(task["title"], "详情测试");
     assert_eq!(task["status"], "running");
     assert_eq!(task["assignee"], "bob");
     assert_eq!(task["tenant"], "board-x");
+    // 新增：验证之前缺失的字段
+    assert_eq!(task["priority"], 0, "应包含 priority 字段");
+    assert!(task.get("created_at").is_some(), "应包含 created_at 字段");
 
     // 验证 comments
     let comments = detail

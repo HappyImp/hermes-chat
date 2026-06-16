@@ -69,36 +69,44 @@ impl KanbanService {
     pub async fn list_tasks_json(&self, tenant_id: &str) -> Result<Vec<Value>, AppError> {
         let tenant_id = tenant_id.to_string();
 
-        let result = tokio::task::spawn_blocking(move || {
-            let output = std::process::Command::new(HERMES_BIN)
-                .args(["kanban", "list", "--json", "--tenant", &tenant_id])
-                .output();
+        // 🟢9: spawn_blocking 加 30 秒超时，CLI 挂起不阻塞 tokio 线程
+        let result = tokio::time::timeout(
+            Duration::from_secs(30),
+            tokio::task::spawn_blocking(move || {
+                let output = std::process::Command::new(HERMES_BIN)
+                    .args(["kanban", "list", "--json", "--tenant", &tenant_id])
+                    .output();
 
-            match output {
-                Ok(o) if o.status.success() => {
-                    let stdout = String::from_utf8_lossy(&o.stdout);
-                    match serde_json::from_str::<Value>(&stdout) {
-                        Ok(Value::Array(arr)) => Ok(arr),
-                        Ok(_) => Ok(vec![]),
-                        Err(e) => {
-                            // 🔴4: 原始错误记日志，返回通用错误
-                            tracing::error!("kanban list JSON 解析失败: {}", e);
-                            Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                match output {
+                    Ok(o) if o.status.success() => {
+                        let stdout = String::from_utf8_lossy(&o.stdout);
+                        match serde_json::from_str::<Value>(&stdout) {
+                            Ok(Value::Array(arr)) => Ok(arr),
+                            Ok(_) => Ok(vec![]),
+                            Err(e) => {
+                                // 🔴4: 原始错误记日志，返回通用错误
+                                tracing::error!("kanban list JSON 解析失败: {}", e);
+                                Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                            }
                         }
                     }
+                    Ok(o) => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        tracing::error!("kanban list CLI 执行失败: {}", stderr);
+                        Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                    }
+                    Err(e) => {
+                        tracing::error!("kanban list CLI 启动失败: {}", e);
+                        Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
+                    }
                 }
-                Ok(o) => {
-                    let stderr = String::from_utf8_lossy(&o.stderr);
-                    tracing::error!("kanban list CLI 执行失败: {}", stderr);
-                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
-                }
-                Err(e) => {
-                    tracing::error!("kanban list CLI 启动失败: {}", e);
-                    Err(AppError::Internal("服务暂时不可用，请稍后重试".to_string()))
-                }
-            }
-        })
+            }),
+        )
         .await
+        .map_err(|_| {
+            tracing::error!("kanban list CLI 执行超时（30s）");
+            AppError::Internal("服务暂时不可用，请稍后重试".to_string())
+        })?
         .map_err(|e| {
             tracing::error!("kanban list spawn_blocking 失败: {}", e);
             AppError::Internal("服务暂时不可用，请稍后重试".to_string())
@@ -109,27 +117,27 @@ impl KanbanService {
 
     /// 查询单个任务详情（必须传 tenant_id 做隔离）
     ///
-    /// 优先从 DB 查询（当 kanban_pool 存在时），否则降级到 CLI。
+    /// 从 DB 查询完整任务信息（含 priority/workspace_kind 等全部字段）。
     /// 返回 JSON: { "task": {...}, "comments": [...], "events": [...] }
     pub async fn get_task(&self, task_id: &str, tenant_id: &str) -> Result<Value, AppError> {
         let pool = self.kanban_pool.as_ref().ok_or_else(|| {
             AppError::Internal("Kanban 未配置".to_string())
         })?;
 
-        // 查询 task
-        let task_row: Option<(String, String, Option<String>, String, Option<String>, Option<String>)> =
-            sqlx::query_as(
-                "SELECT id, title, body, status, assignee, tenant FROM tasks WHERE id = ?",
-            )
-            .bind(task_id)
-            .fetch_optional(pool)
-            .await?;
+        // 查询完整 task（使用 KanbanTask 映射，返回所有字段）
+        let task: Option<KanbanTask> = sqlx::query_as::<_, KanbanTask>(
+            "SELECT id, title, body, status, assignee, tenant, priority,
+             workspace_kind, workspace_path, created_by, created_at, started_at, completed_at
+             FROM tasks WHERE id = ?",
+        )
+        .bind(task_id)
+        .fetch_optional(pool)
+        .await?;
 
-        let (id, title, body, status, assignee, tenant) =
-            task_row.ok_or_else(|| AppError::NotFound("任务不存在".to_string()))?;
+        let task = task.ok_or_else(|| AppError::NotFound("任务不存在".to_string()))?;
 
-        // 验证 tenant 隔离：task.tenant 存在时必须匹配
-        if let Some(ref t) = tenant {
+        // 验证 tenant 隔离：task.ttenant 存在时必须匹配
+        if let Some(ref t) = task.tenant {
             if t != tenant_id {
                 return Err(AppError::Forbidden(
                     "无权访问该任务：tenant 不匹配".to_string(),
@@ -164,14 +172,7 @@ impl KanbanService {
         .collect();
 
         Ok(json!({
-            "task": {
-                "id": id,
-                "title": title,
-                "body": body,
-                "status": status,
-                "assignee": assignee,
-                "tenant": tenant,
-            },
+            "task": task,
             "comments": comments,
             "events": events,
         }))

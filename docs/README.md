@@ -59,7 +59,8 @@
 |------|------|------|
 | [test/README.md](test/README.md) | 2026-06-14 | 测试策略 + 目录结构 |
 || [test/2026-06-14_test-report.md](test/2026-06-14_test-report.md) | 2026-06-14 | 测试报告（33 文件 / 265 测试全部通过） |
-|| [test/2026-06-15_test-report.md](test/2026-06-15_test-report.md) | 2026-06-15 | 测试报告（33 文件 / 271 测试全部通过） |
+|| [test/2026-06-15_test-report.md](test/2026-06-15_test-report.md) | 2026-06-15 | 测试报告（37 文件 / 359 测试全部通过） |
+| [test/2026-06-16_admin-panel-e2e-test-report.md](test/2026-06-16_admin-panel-e2e-test-report.md) | 2026-06-16 | Admin 面板 E2E 测试报告 |
 | [test/2026-06-15_backend-kanban-test-report.md](test/2026-06-15_backend-kanban-test-report.md) | 2026-06-15 | 后端 Kanban 模块测试报告（33 个测试全部通过） |
 
 ## 🧩 组件文档 (docs/components/)
@@ -92,3 +93,5 @@
 | [backlog/2026-06-15_phase2-p1-review-v2.md](backlog/2026-06-15_phase2-p1-review-v2.md) | 2026-06-15 | Phase 2 P1 复审 — 4🔴已修复，剩余 1🟡安全+3🟡文档 |
 | [backlog/2026-06-15_phase3-p0-review.md](backlog/2026-06-15_phase3-p0-review.md) | 2026-06-15 | Phase 3 P0 审查 — KAN-301/302/303（5🟡+3🟢） |
 | [backlog/2026-06-16_kan-304-websocket-review.md](backlog/2026-06-16_kan-304-websocket-review.md) | 2026-06-16 | KAN-304 WebSocket 实时更新审查（2🔴+8🟡+3🟢） |
+| [backlog/2026-06-16_kan-304-review-v2.md](backlog/2026-06-16_kan-304-review-v2.md) | 2026-06-16 | KAN-304 二审（1🟡逻辑+3🟡文档+3🟢，✅可合并） |
+| [backlog/2026-06-16_task-claimed-old-assignee-fix.md](backlog/2026-06-16_task-claimed-old-assignee-fix.md) | 2026-06-16 | task_claimed 旧 assignee 重算修复审查（3🟡+1🟢） |

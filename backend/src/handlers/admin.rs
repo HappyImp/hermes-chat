@@ -44,6 +44,11 @@ pub struct UpdatePermissionsRequest {
     pub tenant: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateTenantsRequest {
+    pub tenant_ids: Vec<String>,
+}
+
 fn default_tenant() -> String {
     "default".to_string()
 }
@@ -222,6 +227,30 @@ pub async fn dashboard(
 }
 
 // ==================== 审计日志 ====================
+
+/// GET /api/admin/tenants
+pub async fn list_tenants(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> Result<Json<Value>, AppError> {
+    let admin_svc = AdminService::new();
+    let tenants = admin_svc.list_all_tenants(&state.pool).await?;
+    Ok(Json(json!({ "tenants": tenants })))
+}
+
+/// PUT /api/admin/users/:id/tenants
+pub async fn update_user_tenants(
+    State(state): State<AppState>,
+    admin: AdminUser,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateTenantsRequest>,
+) -> Result<Json<Value>, AppError> {
+    let admin_svc = AdminService::new();
+    admin_svc
+        .update_user_tenants(&state.pool, &admin.user_id, &id, input.tenant_ids)
+        .await?;
+    Ok(Json(json!({ "message": "Tenant 映射已更新" })))
+}
 
 /// GET /api/admin/audit-logs
 pub async fn get_audit_logs(

@@ -1,26 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EMPLOYEE_META, resolveAssignee, resolveCronJobName } from '../employeeMapping';
-
-describe('EMPLOYEE_META', () => {
-  it('contains all known employees', () => {
-    const names = Object.keys(EMPLOYEE_META);
-    expect(names).toContain('老财');
-    expect(names).toContain('铁壳');
-    expect(names).toContain('小K');
-    expect(names).toContain('404');
-    expect(names).toContain('裁判君');
-    expect(names).toContain('Ditto');
-  });
-
-  it('each employee has required fields', () => {
-    for (const [name, meta] of Object.entries(EMPLOYEE_META)) {
-      expect(meta.role, `${name} missing role`).toBeTruthy();
-      expect(meta.avatar, `${name} missing avatar`).toBeTruthy();
-      expect(Array.isArray(meta.tasks), `${name} tasks not array`).toBe(true);
-      expect(meta.aliases.length, `${name} aliases empty`).toBeGreaterThan(0);
-    }
-  });
-});
+import { resolveAssignee } from '../employeeMapping';
 
 describe('resolveAssignee', () => {
   it('maps profile names containing 404', () => {
@@ -62,46 +41,5 @@ describe('resolveAssignee', () => {
 
   it('returns null for unknown assignee', () => {
     expect(resolveAssignee('random-user')).toBeNull();
-  });
-});
-
-describe('resolveCronJobName', () => {
-  it('maps 老财 jobs', () => {
-    expect(resolveCronJobName('老财-盘前研判')).toBe('老财');
-    expect(resolveCronJobName('老财-开盘异动')).toBe('老财');
-  });
-
-  it('maps 铁壳 jobs', () => {
-    expect(resolveCronJobName('铁壳日报')).toBe('铁壳');
-  });
-
-  it('maps 小K jobs', () => {
-    expect(resolveCronJobName('小K早报')).toBe('小K');
-  });
-
-  it('maps jobs containing 早报 to 小K', () => {
-    expect(resolveCronJobName('科技早报')).toBe('小K');
-  });
-
-  it('maps 404 jobs', () => {
-    expect(resolveCronJobName('404日报')).toBe('404');
-    expect(resolveCronJobName('404-employee-status-api')).toBe('404');
-  });
-
-  it('maps 裁判君 jobs', () => {
-    expect(resolveCronJobName('裁判君审查')).toBe('裁判君');
-  });
-
-  it('maps Ditto jobs', () => {
-    expect(resolveCronJobName('Ditto测试')).toBe('Ditto');
-    expect(resolveCronJobName('ditto-test')).toBe('Ditto');
-  });
-
-  it('returns null for unknown job names', () => {
-    expect(resolveCronJobName('random-task')).toBeNull();
-  });
-
-  it('returns null for empty string', () => {
-    expect(resolveCronJobName('')).toBeNull();
   });
 });

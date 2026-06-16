@@ -167,5 +167,10 @@ pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await;
 
+    // KAN-404: 授权码增加 allowed_tenants 字段（兼容旧数据库）
+    let _ = sqlx::query("ALTER TABLE invitation_codes ADD COLUMN allowed_tenants TEXT")
+        .execute(pool)
+        .await;
+
     Ok(())
 }

@@ -50,7 +50,7 @@
 |----|------|------|--------|
 | KAN-401 | 并行运行验证 | flow-gate 与 kanban 并行运行 1 周，验证数据一致性 | P0 |
 | KAN-402 | 废弃 flow-gate plugin | 停用 flow-gate-plugin，移除相关配置 | P1 |
-| KAN-403 | 清理旧代码 | 移除 `api/cronJobs.ts`、`EMPLOYEE_META` 硬编码、active.json 逻辑 | P1 |
+| KAN-403 | 清理旧代码 | 移除 `api/cronJobs.ts`、`EMPLOYEE_META` 硬编码、active.json 逻辑 | P1 | ✅ 2026-06-16 |
 | KAN-404 | 更新管理后台 | admin 权限管理改为 tenant 映射方式 | P2 |
 
 ---
