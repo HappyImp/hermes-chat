@@ -324,7 +324,7 @@ async fn test_list_users_with_join() {
         assert!(u["role"].is_string());
         assert!(u["enabled"].is_boolean());
         assert!(u["created_at"].is_string());
-        assert!(u["allowed_employees"].is_array());
+        assert!(u["tenants"].is_array());
     }
 }
 

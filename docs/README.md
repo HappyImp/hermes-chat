@@ -95,3 +95,4 @@
 | [backlog/2026-06-16_kan-304-websocket-review.md](backlog/2026-06-16_kan-304-websocket-review.md) | 2026-06-16 | KAN-304 WebSocket 实时更新审查（2🔴+8🟡+3🟢） |
 | [backlog/2026-06-16_kan-304-review-v2.md](backlog/2026-06-16_kan-304-review-v2.md) | 2026-06-16 | KAN-304 二审（1🟡逻辑+3🟡文档+3🟢，✅可合并） |
 | [backlog/2026-06-16_task-claimed-old-assignee-fix.md](backlog/2026-06-16_task-claimed-old-assignee-fix.md) | 2026-06-16 | task_claimed 旧 assignee 重算修复审查（3🟡+1🟢） |
+| [backlog/2026-06-16_commit-41457b2-review.md](backlog/2026-06-16_commit-41457b2-review.md) | 2026-06-16 | commit 41457b2 全量审查（3🔴+5🟡+3🟢，❌需修改） |
