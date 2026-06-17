@@ -72,6 +72,32 @@ describe('useChat', () => {
     expect(session?.messages[1].content).toContain('错误');
   });
 
+  it('sends correct request body with session_id and employee', async () => {
+    const sessionId = useSessionStore.getState().createSession('default');
+    const stream = makeStream([
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: stream,
+    } as unknown as Response);
+    const { result } = renderHook(() => useChat());
+    await act(async () => {
+      await result.current.sendMessage('test');
+    });
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(body.session_id).toBe(sessionId);
+    expect(body.employee).toBe('hermes-agent');
+    expect(body.stream).toBe(true);
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0].role).toBe('user');
+    expect(body.messages[0].content).toBe('test');
+    // 确保不再发送旧的 model 字段
+    expect(body.model).toBeUndefined();
+  });
+
   it('sends message and processes SSE response', async () => {
     useSessionStore.getState().createSession('default');
     const stream = makeStream([

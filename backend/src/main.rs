@@ -72,7 +72,7 @@ async fn main() {
     // 初始化服务
     let auth_service = AuthService::new(config.jwt.secret.clone(), config.jwt.expires_in_hours);
 
-    let hermes_client = HermesClient::new(config.hermes.gateway_url.clone());
+    let hermes_client = HermesClient::new(config.hermes.gateway_url.clone(), config.hermes.api_key.clone());
 
     let kanban_service = match kanban_pool {
         Some(p) => KanbanService::with_kanban_pool(p),

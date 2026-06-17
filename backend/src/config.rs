@@ -34,6 +34,7 @@ pub struct JwtConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct HermesConfig {
     pub gateway_url: String,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

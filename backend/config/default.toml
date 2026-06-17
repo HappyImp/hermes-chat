@@ -12,6 +12,7 @@ expires_in_hours = 24
 
 [hermes]
 gateway_url = "http://127.0.0.1:8642"
+# api_key 通过环境变量 APP__HERMES__API_KEY 注入
 
 [kanban]
 # kanban SQLite 数据库路径（绝对路径，避免 HOME 环境变量污染问题）

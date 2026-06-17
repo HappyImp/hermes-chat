@@ -211,7 +211,8 @@ async function attemptSend(opts: {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: 'hermes-agent',
+        session_id: useSessionStore.getState().getCurrentSession()?.id ?? '',
+        employee: 'hermes-agent',
         messages: getMessages(),
         stream: true,
       }),

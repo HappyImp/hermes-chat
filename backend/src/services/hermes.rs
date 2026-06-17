@@ -20,13 +20,15 @@ pub struct HermesMessage {
 pub struct HermesClient {
     client: Client,
     gateway_url: String,
+    api_key: Option<String>,
 }
 
 impl HermesClient {
-    pub fn new(gateway_url: String) -> Self {
+    pub fn new(gateway_url: String, api_key: Option<String>) -> Self {
         Self {
             client: Client::new(),
             gateway_url,
+            api_key,
         }
     }
 
@@ -43,10 +45,13 @@ impl HermesClient {
             stream: true,
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
+        let mut request_builder = self.client.post(&url).json(&request);
+
+        if let Some(ref key) = self.api_key {
+            request_builder = request_builder.bearer_auth(key);
+        }
+
+        let response = request_builder
             .send()
             .await
             .map_err(|e| AppError::ServiceUnavailable(format!("Hermes 请求失败: {}", e)))?;
