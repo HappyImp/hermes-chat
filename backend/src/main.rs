@@ -195,10 +195,15 @@ async fn main() {
         )
         .nest(
             "/api/employees",
-            employee_routes.route_layer(axum_middleware::from_fn_with_state(
-                state.clone(),
-                auth_middleware,
-            )),
+            employee_routes
+                .route_layer(axum_middleware::from_fn_with_state(
+                    state.clone(),
+                    tenant_middleware,
+                ))
+                .route_layer(axum_middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                )),
         )
         .nest(
             "/api/admin",

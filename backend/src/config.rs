@@ -70,10 +70,23 @@ impl AppConfig {
     }
 
     /// 解析 kanban 数据库路径（展开 ~ 为 home 目录）
+    /// HOME 不存在或展开后路径无效时回退 /root（防止 ops 部署任务继承错误 HOME）
     pub fn kanban_db_url(&self) -> String {
         let path = if self.kanban.db_path.starts_with("~/") {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-            format!("{}{}", home, &self.kanban.db_path[1..])
+            let home = match std::env::var("HOME") {
+                Ok(h) if !h.is_empty() => h,
+                _ => "/root".to_string(),
+            };
+            let expanded = format!("{}{}", home, &self.kanban.db_path[1..]);
+            // 如果展开后路径的父目录不存在，回退到 /root
+            if std::path::Path::new(&expanded)
+                .parent()
+                .map_or(false, |p| p.exists())
+            {
+                expanded
+            } else {
+                format!("/root{}", &self.kanban.db_path[1..])
+            }
         } else {
             self.kanban.db_path.clone()
         };
